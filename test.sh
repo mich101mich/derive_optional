@@ -7,6 +7,7 @@ function try_silent {
 
 # main tests
 pushd ~/projects/derive_optional
+try_silent rustup update || exit 1
 try_silent cargo update || exit 1
 try_silent cargo +stable test || exit 1
 try_silent cargo +nightly test || exit 1

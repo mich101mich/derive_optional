@@ -33,7 +33,7 @@ pub fn optional(input: TokenStream1) -> TokenStream1 {
     let input = syn::parse_macro_input!(input as syn::DeriveInput);
     match optional_internal(input) {
         Ok(s) => {
-            println!("{}", s.to_string());
+            println!("{}", s);
             s.into()
         }
         Err(e) => e.into(),
