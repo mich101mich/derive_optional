@@ -1,0 +1,22 @@
+[package]
+name = "derive_optional"
+version = "0.1.0"
+authors = ["mich101mich <mich101mich@gmail.com>"]
+edition = "2018"
+rust-version = "1.56.0"
+description = "A derive to add Option's convenience methods to any enum"
+repository = "https://github.com/mich101mich/derive_optional"
+readme = "Readme.md"
+license = "MIT OR Apache-2.0"
+keywords = ["macro", "derive", "option", "enum"]
+categories = ["rust-patterns"]
+exclude = ["/.vscode/*", "/.gitignore", "/.github/*"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "2.0.1", features = ["parsing", "derive", "full"] }
+quote = "1.0.0"
+proc-macro2 = "1.0.0"
+convert_case = "0.6.0"
