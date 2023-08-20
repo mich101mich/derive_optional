@@ -235,7 +235,7 @@ fn optional_internal(input: syn::DeriveInput) -> Result<TokenStream> {
             name = name,
             ty = some_ty_name,
         );
-        // can't be c_func right now because of &mut: see issue #57349 <https://github.com/rust-lang/rust/issues/57349>
+        // can't be c_func right now because of &mut: see https://github.com/rust-lang/rust/issues/57349
         impl_block.extend(quote! {
             #[doc = #doc]
             #func as_mut(&mut self) -> #name<&mut #some_ty> {
@@ -255,7 +255,7 @@ fn optional_internal(input: syn::DeriveInput) -> Result<TokenStream> {
             name = name,
             ty = some_ty_name,
         );
-        // can't be c_func right now because of Pin::<&'a T>::get_ref
+        // can't be c_func right now because of Pin::<&'a T>::get_ref (https://github.com/rust-lang/rust/issues/76654)
         impl_block.extend(quote! {
             #[doc = #doc]
             #func as_pin_ref(self: ::std::pin::Pin<&Self>) -> #name<::std::pin::Pin<&#some_ty>> {
@@ -277,7 +277,8 @@ fn optional_internal(input: syn::DeriveInput) -> Result<TokenStream> {
             name = name,
             ty = some_ty_name,
         );
-        // can't be c_func right now because of Pin::<&'a mut T>::get_unchecked_mut and &mut
+        // can't be c_func right now because of Pin::<&'a mut T>::get_unchecked_mut (https://github.com/rust-lang/rust/issues/76654)
+        // and &mut (https://github.com/rust-lang/rust/issues/57349)
         impl_block.extend(quote! {
             #[doc = #doc]
             #func as_pin_mut(self: ::std::pin::Pin<&mut Self>) -> #name<::std::pin::Pin<&mut #some_ty>> {
@@ -307,7 +308,7 @@ fn optional_internal(input: syn::DeriveInput) -> Result<TokenStream> {
 Panics if the value is a `{}` with a custom panic message provided by `msg`.",
             name, none_ident,
         );
-        // can't be c_func right now because of `panic`'s formatting. std uses nightly-only functions for this
+        // can't be c_func right now because of `panic`'s formatting. std uses nightly-only functions from feature(core_panic)
         impl_block.extend(quote! {
             #[doc = #doc]
             #func expect(self, msg: &str) -> #some_ty {
@@ -330,7 +331,7 @@ Panics if the value is a `{}` with a custom panic message provided by `msg`.",
 Panics if the value is a `{}`.",
             name, none_ident,
         );
-        // can't be c_func right now because of `panic`'s formatting. std uses nightly-only functions for this
+        // can't be c_func right now because of `panic`'s formatting. std uses nightly-only functions from feature(core_panic)
         impl_block.extend(quote! {
             #[doc = #doc]
             #func unwrap(self) -> #some_ty {
@@ -348,6 +349,7 @@ Panics if the value is a `{}`.",
             "Returns the contained `{}` value or a provided default. Equivalent to `Option::unwrap_or`.",
             name,
         );
+        // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
         impl_block.extend(quote! {
             #[doc = #doc]
             #func unwrap_or(self, default: #some_ty) -> #some_ty {
@@ -365,6 +367,7 @@ Panics if the value is a `{}`.",
             "Returns the contained `{}` value or computes it from a closure. Equivalent to `Option::unwrap_or_else`.",
             name,
         );
+        // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
         impl_block.extend(quote! {
             #[doc = #doc]
             #func unwrap_or_else<F>(self, f: F) -> #some_ty
@@ -385,6 +388,7 @@ Panics if the value is a `{}`.",
             "Returns the contained `{}` value or its default. Equivalent to `Option::unwrap_or_default`.",
             name,
         );
+        // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
         impl_block.extend(quote! {
             #[doc = #doc]
             #func unwrap_or_default(self) -> #some_ty
@@ -409,6 +413,7 @@ Panics if the value is a `{}`.",
 The caller must guarantee that the value is a `{}`. Otherwise, undefined behavior occurs.",
             name, some_ident,
         );
+        // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
         impl_block.extend(quote! {
             #[doc = #doc]
             pub unsafe fn unwrap_unchecked(self) -> #some_ty {
@@ -432,6 +437,7 @@ The caller must guarantee that the value is a `{}`. Otherwise, undefined behavio
             "Maps an `{0}<{1}>` to `{0}<U>` by applying a function to a contained value. Equivalent to `Option::map`.",
             name, some_ty_name,
         );
+        // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
         impl_block.extend(quote! {
             #[doc = #doc]
             #func map<U, F>(self, f: F) -> #name<U>
@@ -454,6 +460,7 @@ The caller must guarantee that the value is a `{}`. Otherwise, undefined behavio
         let doc = format!(
             "Applies a function to the contained value (if any), or returns a default (if not). Equivalent to `Option::map_or`.",
         );
+        // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
         impl_block.extend(quote! {
             #[doc = #doc]
             #func map_or<U, F>(self, default: U, f: F) -> U
@@ -473,6 +480,7 @@ The caller must guarantee that the value is a `{}`. Otherwise, undefined behavio
         let doc = format!(
             "Applies a function to the contained value (if any), or computes a default (if not). Equivalent to `Option::map_or_else`.",
         );
+        // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
         impl_block.extend(quote! {
             #[doc = #doc]
             #func map_or_else<U, D, F>(self, default: D, f: F) -> U
@@ -494,6 +502,7 @@ The caller must guarantee that the value is a `{}`. Otherwise, undefined behavio
             "Transforms the `{}` into a `Result<{}, E>`, mapping `{}` to `Ok(x)` and `{}` to `Err(err)`. Equivalent to `Option::ok_or`.",
             name, some_ty_name, some_x, none_pattern,
         );
+        // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
         impl_block.extend(quote! {
             #[doc = #doc]
             #func ok_or<E>(self, err: E) -> ::std::result::Result<#some_ty, E> {
@@ -511,6 +520,7 @@ The caller must guarantee that the value is a `{}`. Otherwise, undefined behavio
             "Transforms the `{}` into a `Result<{}, E>`, mapping `{}` to `Ok(x)` and `{}` to `Err(err())`. Equivalent to `Option::ok_or_else`.",
             name, some_ty_name, some_x, none_pattern,
         );
+        // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
         impl_block.extend(quote! {
             #[doc = #doc]
             #func ok_or_else<E, F>(self, err: F) -> ::std::result::Result<#some_ty, E>
@@ -532,6 +542,7 @@ The caller must guarantee that the value is a `{}`. Otherwise, undefined behavio
             "Creates a `{0}<&{1}::Target>` from an `&{0}<{1}>`. Equivalent to `Option::as_deref`.",
             name, some_ty_name,
         );
+        // can't be c_func right now because of trait bounds (https://github.com/rust-lang/rust/issues/67792)
         impl_block.extend(quote! {
             #[doc = #doc]
             #func as_deref(&self) -> #name<&<#some_ty as ::std::ops::Deref>::Target>
@@ -553,6 +564,8 @@ The caller must guarantee that the value is a `{}`. Otherwise, undefined behavio
             "Creates a `{0}<&mut {1}::Target>` from an `&mut {0}<{1}>`. Equivalent to `Option::as_deref_mut`.",
             name, some_ty_name,
         );
+        // can't be c_func right now because of trait bounds (https://github.com/rust-lang/rust/issues/67792)
+        // and &mut (https://github.com/rust-lang/rust/issues/57349)
         impl_block.extend(quote! {
             #[doc = #doc]
             #func as_deref_mut(&mut self) -> #name<&mut <#some_ty as ::std::ops::Deref>::Target>
