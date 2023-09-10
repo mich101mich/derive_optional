@@ -63,6 +63,25 @@ use syn::Ident;
 /// - `ok_or_else`
 /// - `as_deref` (G)
 /// - `as_deref_mut` (G)
+///
+/// #### Iterator constructors
+/// - `iter`
+/// - `iter_mut`
+///
+/// #### Boolean operations on the values, eager and lazy
+/// - `and`
+/// - `and_then`
+/// - `filter`
+/// - `or`
+/// - `or_else`
+/// - `xor`
+///
+/// ## Additional Methods not in `Option`
+/// - `as_option_ref`: Converts `&Self` to `Option<&inner>`, similar to `as_ref`
+///   but swapping `Self` with `Option`
+/// - `as_option_mut`: Converts `&mut Self` to `Option<&mut inner>`, similar to `as_mut`
+///   but swapping `Self` with `Option`
+///
 #[proc_macro_derive(Optional)]
 pub fn optional(input: TokenStream1) -> TokenStream1 {
     let input = syn::parse_macro_input!(input as syn::DeriveInput);
@@ -150,6 +169,7 @@ fn optional_internal(input: syn::DeriveInput) -> Result<TokenStream> {
     let some_x = some_pattern(quote! {x});
     let some_ref_x = some_pattern(quote! {ref x});
     let some_ref_mut_x = some_pattern(quote! {ref mut x});
+    let some__ = some_pattern(quote! {..});
 
     let is_generic = generics.params.iter().any(|param| {
         if let syn::GenericParam::Type(ty) = param {
@@ -581,8 +601,216 @@ The caller must guarantee that the value is a `{}`. Otherwise, undefined behavio
     }
 
     /////////////////////////////////////////////////////////////////////////
+    // Iterator constructors
+    /////////////////////////////////////////////////////////////////////////
+
+    // iter
+    {
+        let doc = format!(
+            "Returns an iterator over the possibly contained value. Equivalent to `Option::iter`.",
+        );
+        impl_block.extend(quote! {
+            #[doc = #doc]
+            #func iter(&self) -> ::std::option::IntoIter<&#some_ty> {
+                self.as_option_ref().into_iter()
+            }
+        });
+    }
+
+    // iter_mut
+    {
+        let doc = format!(
+            "Returns a mutable iterator over the possibly contained value. Equivalent to `Option::iter_mut`.",
+        );
+        impl_block.extend(quote! {
+            #[doc = #doc]
+            #func iter_mut(&mut self) -> ::std::option::IntoIter<&mut #some_ty> {
+                self.as_option_mut().into_iter()
+            }
+        });
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    // Boolean operations on the values, eager and lazy
+    /////////////////////////////////////////////////////////////////////////
+
+    // and
+    {
+        let doc = format!(
+            "Returns `{1}` if the `{0}` is a `{1}`, otherwise returns `optb`. Equivalent to `Option::and`.",
+            name, none_ident,
+        );
+        if is_generic {
+            impl_block.extend(quote! {
+                #[doc = #doc]
+                #func and<U>(self, optb: #name<U>) -> #name<U> {
+                    match self {
+                        #some__ => optb,
+                        _ => #none_pattern,
+                    }
+                }
+            });
+        } else {
+            impl_block.extend(quote! {
+                #[doc = #doc]
+                #func and(self, optb: Self) -> Self {
+                    match self {
+                        #some__ => optb,
+                        _ => #none_pattern,
+                    }
+                }
+            });
+        }
+    }
+
+    // and_then
+    {
+        let doc = format!(
+            "Returns `{1}` if the `{0}` is a `{1}`, otherwise calls `f` and returns the result. Equivalent to `Option::and_then`.",
+            name, none_ident,
+        );
+        if is_generic {
+            impl_block.extend(quote! {
+                #[doc = #doc]
+                #func and_then<U, F>(self, f: F) -> #name<U>
+                where
+                    F: FnOnce(#some_ty) -> #name<U>,
+                {
+                    match self {
+                        #some_x => f(x),
+                        _ => #none_pattern,
+                    }
+                }
+            });
+        } else {
+            impl_block.extend(quote! {
+                #[doc = #doc]
+                #func and_then<F>(self, f: F) -> Self
+                where
+                    F: FnOnce(#some_ty) -> Self,
+                {
+                    match self {
+                        #some_x => f(x),
+                        _ => #none_pattern,
+                    }
+                }
+            });
+        }
+    }
+
+    // filter
+    {
+        let doc = format!(
+            "Returns a `{2}` if the `{0}` is a `{2}` and the contained value satisfies the predicate `pred`, otherwise returns `{1}`. Equivalent to `Option::filter`.",
+            name, none_ident, some_ident,
+        );
+        impl_block.extend(quote! {
+            #[doc = #doc]
+            #func filter<P>(self, pred: P) -> Self
+            where
+                P: FnOnce(&#some_ty) -> bool,
+            {
+                match self {
+                    #some_x if pred(&x) => #some_x,
+                    _ => #none_pattern,
+                }
+            }
+        });
+    }
+
+    // or
+    {
+        let doc = format!(
+            "Returns the `{0}` if it is a `{1}`, otherwise returns `optb`. Equivalent to `Option::or`.",
+            name, some_ident,
+        );
+        impl_block.extend(quote! {
+            #[doc = #doc]
+            #func or(self, optb: Self) -> Self {
+                match self {
+                    #some_x => #some_x,
+                    _ => optb,
+                }
+            }
+        });
+    }
+
+    // or_else
+    {
+        let doc = format!(
+            "Returns the `{0}` if it is a `{1}`, otherwise calls `f` and returns the result. Equivalent to `Option::or_else`.",
+            name, some_ident,
+        );
+        impl_block.extend(quote! {
+            #[doc = #doc]
+            #func or_else<F>(self, f: F) -> Self
+            where
+                F: FnOnce() -> Self,
+            {
+                match self {
+                    #some_x => #some_x,
+                    _ => f(),
+                }
+            }
+        });
+    }
+
+    // xor
+    {
+        let doc = format!(
+            "Returns `{1}` if exactly one of `self` or `optb` is a `{1}`, otherwise returns `{0}`. Equivalent to `Option::xor`.",
+            none_ident, some_ident,
+        );
+        impl_block.extend(quote! {
+            #[doc = #doc]
+            #func xor(self, optb: Self) -> Self {
+                match (self, optb) {
+                    (#some_x, #none_pattern) | (#none_pattern, #some_x) => #some_x,
+                    _ => #none_pattern,
+                }
+            }
+        });
+    }
+
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    // as_option_ref
+    {
+        let doc = format!(
+            "Converts from `&{name}<{ty}>` to `Option<&{ty}>`.",
+            name = name,
+            ty = some_ty_name,
+        );
+        impl_block.extend(quote! {
+            #[doc = #doc]
+            #c_func as_option_ref(&self) -> ::std::option::Option<&#some_ty> {
+                match *self {
+                    #some_ref_x => ::std::option::Option::Some(x),
+                    _ => ::std::option::Option::None,
+                }
+            }
+        });
+    }
+
+    // as_option_mut
+    {
+        let doc = format!(
+            "Converts from `&mut {name}<{ty}>` to `Option<&mut {ty}>`.",
+            name = name,
+            ty = some_ty_name,
+        );
+        impl_block.extend(quote! {
+            #[doc = #doc]
+            #func as_option_mut(&mut self) -> ::std::option::Option<&mut #some_ty> {
+                match *self {
+                    #some_ref_mut_x => ::std::option::Option::Some(x),
+                    _ => ::std::option::Option::None,
+                }
+            }
+        });
+    }
 
     let mut additional_impls = TokenStream::new();
 
