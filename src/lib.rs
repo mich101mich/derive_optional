@@ -244,7 +244,7 @@ fn optional_internal(input: syn::DeriveInput) -> Result<TokenStream> {
         impl_block.extend(quote! {
             #[doc = #doc]
             #c_func #is_some(&self) -> bool {
-                !matches!(*self, #none_pattern)
+                matches!(*self, #some__)
             }
         });
     }
