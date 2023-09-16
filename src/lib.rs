@@ -28,6 +28,7 @@ use quote::{quote, ToTokens};
 use syn::Ident;
 
 /// TODO: doc
+/// TODO: talk about `T` as placeholder for the contained type
 ///
 /// ## Added Methods
 ///
@@ -76,12 +77,39 @@ use syn::Ident;
 /// - `or_else`
 /// - `xor`
 ///
+/// #### Entry-like operations to insert a value and return a reference
+/// - `insert`
+/// - `get_or_insert`
+/// - `get_or_insert_default`
+/// - `get_or_insert_with`
+///
+/// #### Misc
+/// - `take`
+/// - `replace`
+/// - `contains`
+/// - `zip` (G)
+/// - `zip_with`
+///
 /// ## Additional Methods not in `Option`
 /// - `as_option_ref`: Converts `&Self` to `Option<&inner>`, similar to `as_ref`
 ///   but swapping `Self` with `Option`
 /// - `as_option_mut`: Converts `&mut Self` to `Option<&mut inner>`, similar to `as_mut`
 ///   but swapping `Self` with `Option`
 ///
+/// ## Traits
+/// - `From<T> for Self`
+/// - `From<Option<T>> for Self`
+/// - `From<Self> for Option<T>`
+/// - `Self: Default`
+/// - `Self: PartialEq` if `T: PartialEq`
+/// - `Self: Eq` if `T: Eq`
+///
+/// ## Things that were **not** added
+/// - `PartialOrd` and `Ord` because the ordering between `Some` and `None` is not clear here
+/// - `Debug`, `Clone`, `Copy`, `Hash` because they require a choice if they are necessary
+///   and can be derived if needed
+/// - unstable or nightly-only methods and traits
+///   - this sadly includes the try (`?`) operator
 #[proc_macro_derive(Optional)]
 pub fn optional(input: TokenStream1) -> TokenStream1 {
     let input = syn::parse_macro_input!(input as syn::DeriveInput);
@@ -104,6 +132,17 @@ fn optional_internal(input: syn::DeriveInput) -> Result<TokenStream> {
     let wheres = where_clause
         .map(|c| c.to_token_stream())
         .unwrap_or_else(TokenStream::new);
+    let where_clause = match where_clause {
+        Some(c) => {
+            let mut s = c.to_token_stream();
+            // check if there is a trailing `,` and add one if not
+            if !s.is_empty() && !s.to_string().trim().ends_with(',') {
+                s.extend(quote! {,});
+            }
+            s
+        }
+        None => quote! {where },
+    };
 
     let data = match input.data {
         syn::Data::Enum(data) => Ok(data),
@@ -170,6 +209,8 @@ fn optional_internal(input: syn::DeriveInput) -> Result<TokenStream> {
     let some_ref_x = some_pattern(quote! {ref x});
     let some_ref_mut_x = some_pattern(quote! {ref mut x});
     let some__ = some_pattern(quote! {..});
+    let some_y = some_pattern(quote! {y});
+    let some_xy = some_pattern(quote! {(x, y)});
 
     let is_generic = generics.params.iter().any(|param| {
         if let syn::GenericParam::Type(ty) = param {
@@ -209,7 +250,7 @@ fn optional_internal(input: syn::DeriveInput) -> Result<TokenStream> {
     }
 
     // is_some_and
-    // TODO: unstable
+    // unstable
 
     // is_none
     {
@@ -473,7 +514,7 @@ The caller must guarantee that the value is a `{}`. Otherwise, undefined behavio
     }
 
     // inspect
-    // TODO: unstable
+    // unstable
 
     // map_or
     if is_generic {
@@ -773,6 +814,202 @@ The caller must guarantee that the value is a `{}`. Otherwise, undefined behavio
     }
 
     /////////////////////////////////////////////////////////////////////////
+    // Entry-like operations to insert a value and return a reference
+    /////////////////////////////////////////////////////////////////////////
+
+    // insert
+    {
+        let doc = format!(
+            "Inserts a value into the `{}`, then returns a mutable reference to it. Equivalent to `Option::insert`.",
+            name
+        );
+        impl_block.extend(quote! {
+            #[doc = #doc]
+            #func insert(&mut self, x: #some_ty) -> &mut #some_ty {
+                *self = #some_x;
+                match self {
+                    #some_ref_mut_x => x,
+
+                    // SAFETY: a value was just inserted.
+                    _ => unsafe { ::std::hint::unreachable_unchecked() },
+                }
+            }
+        });
+    }
+
+    // get_or_insert
+    {
+        let doc = format!(
+            "Returns a mutable reference to the contained value, inserting the provided value if empty. Equivalent to `Option::get_or_insert`.",
+        );
+        impl_block.extend(quote! {
+            #[doc = #doc]
+            #func get_or_insert(&mut self, value: #some_ty) -> &mut #some_ty {
+                match self {
+                    #some_ref_mut_x => x,
+                    _ => self.insert(value),
+                }
+            }
+        });
+    }
+
+    // get_or_insert_default
+    {
+        let doc = format!(
+            "Returns a mutable reference to the contained value, inserting the default value if empty. Equivalent to `Option::get_or_insert_default`.",
+        );
+        impl_block.extend(quote! {
+            #[doc = #doc]
+            #func get_or_insert_default(&mut self) -> &mut #some_ty
+            where
+                #some_ty: ::std::default::Default,
+            {
+                self.get_or_insert_with(::std::default::Default::default)
+            }
+        });
+    }
+
+    // get_or_insert_with
+    {
+        let doc = format!(
+            "Returns a mutable reference to the contained value, inserting the result of the provided function if empty. Equivalent to `Option::get_or_insert_with`.",
+        );
+        impl_block.extend(quote! {
+            #[doc = #doc]
+            #func get_or_insert_with<F>(&mut self, f: F) -> &mut #some_ty
+            where
+                F: FnOnce() -> #some_ty,
+            {
+                match self {
+                    #some_ref_mut_x => x,
+                    _ => self.insert(f()),
+                }
+            }
+        });
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    // Misc
+    /////////////////////////////////////////////////////////////////////////
+
+    // take
+    {
+        let doc = format!(
+            "Replaces the `{}` with `{}` and returns the old value, if any. Equivalent to `Option::take`.",
+            name, none_ident,
+        );
+        impl_block.extend(quote! {
+            #[doc = #doc]
+            #func take(&mut self) -> Self {
+                ::std::mem::take(self)
+            }
+        });
+    }
+
+    // replace
+    {
+        let doc = format!(
+            "Replaces the actual value in the `{}` with the provided one, returning the old value, if any. Equivalent to `Option::replace`.",
+            name,
+        );
+        impl_block.extend(quote! {
+            #[doc = #doc]
+            #func replace(&mut self, x: #some_ty) -> Self {
+                ::std::mem::replace(self, #some_x)
+            }
+        });
+    }
+
+    // contains
+    {
+        let doc = format!(
+            "Returns `true` if the `{}` contains the given value. Equivalent to `Option::contains`.",
+            name,
+        );
+        impl_block.extend(quote! {
+            #[doc = #doc]
+            #func contains(&self, x: &#some_ty) -> bool
+            where
+                #some_ty: ::std::cmp::PartialEq,
+            {
+                match self {
+                    #some_y => ::std::cmp::PartialEq::eq(x, y),
+                    _ => false,
+                }
+            }
+        });
+    }
+
+    // zip
+    if is_generic {
+        let doc = format!(
+            "zips `self` with another `{}` and returns the pair of contained values if both are `{}`s. Equivalent to `Option::zip`.",
+            name, some_ident,
+        );
+        impl_block.extend(quote! {
+            #[doc = #doc]
+            #func zip<U>(self, other: #name<U>) -> #name<(#some_ty, U)> {
+                match (self, other) {
+                    (#some_x, #some_y) => #some_xy,
+                    _ => #none_pattern,
+                }
+            }
+        });
+    }
+
+    // zip_with
+    {
+        let doc = format!(
+            "zips `self` with another `{}` and returns the result of the provided function if both are `{}`s. Equivalent to `Option::zip_with`.",
+            name, some_ident,
+        );
+        let pattern = some_pattern(quote! {f(x, y)});
+        if is_generic {
+            impl_block.extend(quote! {
+                #[doc = #doc]
+                #func zip_with<U, F, R>(self, other: #name<U>, f: F) -> #name<R>
+                where
+                    F: FnOnce(#some_ty, U) -> R,
+                {
+                    match (self, other) {
+                        (#some_x, #some_y) => #pattern,
+                        _ => #none_pattern,
+                    }
+                }
+            });
+        } else {
+            impl_block.extend(quote! {
+                #[doc = #doc]
+                #func zip_with<F>(self, other: Self, f: F) -> Self
+                where
+                    F: FnOnce(#some_ty, #some_ty) -> #some_ty,
+                {
+                    match (self, other) {
+                        (#some_x, #some_y) => #pattern,
+                        _ => #none_pattern,
+                    }
+                }
+            });
+        }
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    // TODO: unzip on #name<(#some_ty, U)>
+    // TODO: copied on #name<&#some_ty> where #some_ty: Copy
+    // TODO: cloned on #name<&#some_ty> where #some_ty: Clone
+    // TODO: copied on #name<&mut #some_ty> where #some_ty: Copy
+    // TODO: cloned on #name<&mut #some_ty> where #some_ty: Clone
+    // TODO: transpose on #name<Result<#some_ty, E>>
+    // TODO: transpose on #name<Option<#some_ty>>
+    // TODO: transpose on Option<#name<#some_ty>>
+    // TODO: flatten on #name<#name<#some_ty>>
+    // TODO: flatten on #name<Option<#some_ty>> -> #name<#some_ty>
+    // TODO: flatten on Option<#name<#some_ty>> -> #name<#some_ty>
+
+    /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
@@ -812,7 +1049,24 @@ The caller must guarantee that the value is a `{}`. Otherwise, undefined behavio
         });
     }
 
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
     let mut additional_impls = TokenStream::new();
+
+    // Self: From<#some_ty>
+    {
+        let doc = format!("Moves the value into a `{}`.", some_ident,);
+        additional_impls.extend(quote! {
+            #imp ::std::convert::From<#some_ty> for #full_name #wheres {
+                #[doc = #doc]
+                fn from(x: #some_ty) -> Self {
+                    #some_x
+                }
+            }
+        });
+    }
 
     // Self: From<Option>
     {
@@ -828,6 +1082,7 @@ The caller must guarantee that the value is a `{}`. Otherwise, undefined behavio
             }
         });
     }
+
     // Option: From<Self>
     {
         let pattern = some_pattern(quote! {x});
@@ -842,6 +1097,65 @@ The caller must guarantee that the value is a `{}`. Otherwise, undefined behavio
             }
         });
     }
+
+    // Self: Default
+    {
+        let doc = format!(
+            "Returns a `{}` value. Equivalent to `Option::default`.",
+            none_ident,
+        );
+        additional_impls.extend(quote! {
+            #imp ::std::default::Default for #full_name #wheres {
+                #[doc = #doc]
+                fn default() -> Self {
+                    #none_pattern
+                }
+            }
+        });
+    }
+
+    // Self: IntoIterator
+    {
+        let doc = format!(
+            "Returns an iterator over the possibly contained value. Equivalent to `Option::into_iter`.",
+        );
+        additional_impls.extend(quote! {
+            #imp ::std::iter::IntoIterator for #full_name #wheres {
+                type Item = #some_ty;
+                type IntoIter = ::std::option::IntoIter<#some_ty>;
+
+                #[doc = #doc]
+                fn into_iter(self) -> Self::IntoIter {
+                    ::std::option::Option::from(self).into_iter()
+                }
+            }
+        });
+    }
+
+    // Self: PartialEq<Self>
+    {
+        let doc = format!(
+            "This method tests for `self` and `other` values to be equal, and is used by `==`. Equivalent to `Option::eq`.",
+        );
+        additional_impls.extend(quote! {
+            #imp ::std::cmp::PartialEq<#full_name> for #full_name
+            #where_clause
+                #some_ty: ::std::cmp::PartialEq,
+            {
+                #[doc = #doc]
+                fn eq(&self, other: &#full_name) -> bool {
+                    match (self, other) {
+                        (#some_x, #some_y) => ::std::cmp::PartialEq::eq(x, y),
+                        (#none_pattern, #none_pattern) => true,
+                        _ => false,
+                    }
+                }
+            }
+        });
+    }
+
+    // Self: std::ops::Try
+    // unstable
 
     Ok(quote! {
         #imp #full_name #wheres {
