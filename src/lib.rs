@@ -27,6 +27,63 @@ use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 use syn::Ident;
 
+mod sections {
+    use super::DataContainer;
+    use proc_macro2::TokenStream;
+    use quote::quote;
+    use syn::Ident;
+
+    pub mod additions;
+    pub mod bool_ops;
+    pub mod entry_ops;
+    pub mod get_contained;
+    pub mod iters;
+    pub mod misc;
+    pub mod querying;
+    pub mod ref_adapters;
+    pub mod transformers;
+}
+
+mod external {
+    use super::DataContainer;
+    use proc_macro2::TokenStream;
+    use quote::quote;
+
+    pub mod impls;
+    pub mod traits;
+}
+
+pub(crate) struct DataContainer {
+    name: Ident,
+    full_name: TokenStream,
+    some_ident: Ident,
+    none_ident: Ident,
+    some_snake: String,
+    none_snake: String,
+    none_pattern: TokenStream,
+    some_ty: syn::Type,
+    some_field_ident: Option<Ident>,
+    some_ty_name: String,
+    is_generic: bool,
+    func: TokenStream,
+    c_func: TokenStream,
+    imp: TokenStream,
+    wheres: TokenStream,
+    where_clause: TokenStream,
+}
+
+impl DataContainer {
+    fn some(&self, pattern: TokenStream) -> TokenStream {
+        let name = &self.name;
+        let some_ident = &self.some_ident;
+        if let Some(ident) = self.some_field_ident.as_ref() {
+            quote! {#name::#some_ident { #ident: #pattern }}
+        } else {
+            quote! {#name::#some_ident(#pattern)}
+        }
+    }
+}
+
 /// TODO: doc
 /// TODO: talk about `T` as placeholder for the contained type
 ///
@@ -183,34 +240,26 @@ fn optional_internal(input: syn::DeriveInput) -> Result<TokenStream> {
             (false, true) => (b, a),
         }
     };
-    let some_ident = some_variant.ident;
-    let none_ident = none_variant.ident;
-    let some_snake = some_ident.to_string().to_case(Case::Snake);
-    let none_snake = none_ident.to_string().to_case(Case::Snake);
-    let none_pattern = quote! {#name::#none_ident};
 
     if some_variant.fields.len() != 1 {
         let msg = "Optional currently only supports one type in the variant";
         return Error::err_spanned(some_variant.fields, msg);
     }
 
-    let some_field = some_variant.fields.iter().next().unwrap();
-    let some_ty = &some_field.ty;
+    let some_ident = some_variant.ident;
+    let none_ident = none_variant.ident;
+    let none_pattern = quote! {#name::#none_ident};
+
+    let some_snake = some_ident.to_string().to_case(Case::Snake);
+    let none_snake = none_ident.to_string().to_case(Case::Snake);
+
+    let some_field = some_variant.fields.into_iter().next().unwrap();
+    let some_ty = some_field.ty;
+    let some_field_ident = some_field.ident;
     let some_ty_name = some_ty.to_token_stream().to_string();
 
-    let some_pattern = |pat: TokenStream| {
-        if let Some(ident) = some_field.ident.as_ref() {
-            quote! {#name::#some_ident { #ident: #pat }}
-        } else {
-            quote! {#name::#some_ident(#pat)}
-        }
-    };
-    let some_x = some_pattern(quote! {x});
-    let some_ref_x = some_pattern(quote! {ref x});
-    let some_ref_mut_x = some_pattern(quote! {ref mut x});
-    let some__ = some_pattern(quote! {..});
-    let some_y = some_pattern(quote! {y});
-    let some_xy = some_pattern(quote! {(x, y)});
+    let func = quote! {#[inline] pub fn};
+    let c_func = quote! {#[inline] pub const fn};
 
     let is_generic = generics.params.iter().any(|param| {
         if let syn::GenericParam::Type(ty) = param {
@@ -220,942 +269,47 @@ fn optional_internal(input: syn::DeriveInput) -> Result<TokenStream> {
         }
     });
 
-    let func = quote! {#[inline] pub fn};
-    let c_func = quote! {#[inline] pub const fn};
+    let container = DataContainer {
+        name,
+        full_name,
+        some_ident,
+        none_ident,
+        some_snake,
+        none_snake,
+        none_pattern,
+        some_ty,
+        some_field_ident,
+        some_ty_name,
+        is_generic,
+        func,
+        c_func,
+        imp,
+        wheres,
+        where_clause,
+    };
 
     let mut impl_block = TokenStream::new();
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    /////////////////////////////////////////////////////////////////////////
-    // Querying the contained values
-    /////////////////////////////////////////////////////////////////////////
-
-    // is_some
-    {
-        let is_some = Ident::new(&format!("is_{}", some_snake), some_ident.span());
-        let doc = format!(
-            "Returns `true` if the `{}` is a `{}` value. Equivalent to `Option::is_some`.",
-            name, some_ident,
-        );
-        // some_match might have {} or (), so match against none instead
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #c_func #is_some(&self) -> bool {
-                matches!(*self, #some__)
-            }
-        });
-    }
-
-    // is_some_and
-    // unstable
-
-    // is_none
-    {
-        let is_none = Ident::new(&format!("is_{}", none_snake), none_ident.span());
-        let doc = format!(
-            "Returns `true` if the `{}` is a `{}` value. Equivalent to `Option::is_none`.",
-            name, none_ident,
-        );
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #c_func #is_none(&self) -> bool {
-                matches!(*self, #none_pattern)
-            }
-        });
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    // Adapter for working with references
-    /////////////////////////////////////////////////////////////////////////
-
-    // as_ref
-    if is_generic {
-        let doc = format!(
-            "Converts from `&{name}<{ty}>` to `{name}<&{ty}>`. Equivalent to `Option::as_ref`.",
-            name = name,
-            ty = some_ty_name,
-        );
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #c_func as_ref(&self) -> #name<&#some_ty> {
-                match *self {
-                    #some_ref_x => #some_x,
-                    _ => #none_pattern,
-                }
-            }
-        });
-    }
-
-    // as_mut
-    if is_generic {
-        let doc = format!(
-            "Converts from `&mut {name}<{ty}>` to `{name}<&mut {ty}>`. Equivalent to `Option::as_mut`.",
-            name = name,
-            ty = some_ty_name,
-        );
-        // can't be c_func right now because of &mut: see https://github.com/rust-lang/rust/issues/57349
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #func as_mut(&mut self) -> #name<&mut #some_ty> {
-                match *self {
-                    #some_ref_mut_x => #some_x,
-                    _ => #none_pattern,
-                }
-            }
-        });
-    }
-
-    // as_pin_ref
-    if is_generic {
-        let value = some_pattern(quote! {::std::pin::Pin::new_unchecked(x)});
-        let doc = format!(
-            "Converts from `Pin<&{name}<{ty}>>` to `{name}<Pin<&{ty}>>`. Equivalent to `Option::as_pin_ref`.",
-            name = name,
-            ty = some_ty_name,
-        );
-        // can't be c_func right now because of Pin::<&'a T>::get_ref (https://github.com/rust-lang/rust/issues/76654)
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #func as_pin_ref(self: ::std::pin::Pin<&Self>) -> #name<::std::pin::Pin<&#some_ty>> {
-                match ::std::pin::Pin::get_ref(self).as_ref() {
-                    // SAFETY: `x` is guaranteed to be pinned because it comes from `self`
-                    // which is pinned.
-                    #some_x => unsafe { #value },
-                    _ => #none_pattern,
-                }
-            }
-        });
-    }
-
-    // as_pin_mut
-    if is_generic {
-        let value = some_pattern(quote! {::std::pin::Pin::new_unchecked(x)});
-        let doc = format!(
-            "Converts from `Pin<&mut {name}<{ty}>>` to `{name}<Pin<&mut {ty}>>`. Equivalent to `Option::as_pin_mut`.",
-            name = name,
-            ty = some_ty_name,
-        );
-        // can't be c_func right now because of Pin::<&'a mut T>::get_unchecked_mut (https://github.com/rust-lang/rust/issues/76654)
-        // and &mut (https://github.com/rust-lang/rust/issues/57349)
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #func as_pin_mut(self: ::std::pin::Pin<&mut Self>) -> #name<::std::pin::Pin<&mut #some_ty>> {
-                // SAFETY: `get_unchecked_mut` is never used to move the `Option` inside `self`.
-                // `x` is guaranteed to be pinned because it comes from `self` which is pinned.
-                unsafe {
-                    match ::std::pin::Pin::get_unchecked_mut(self).as_mut() {
-                        #some_x => #value,
-                        _ => #none_pattern,
-                    }
-                }
-            }
-        });
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    // Getting to contained values
-    /////////////////////////////////////////////////////////////////////////
-
-    // expect
-    {
-        let doc = format!(
-            "Returns the contained `{}` value, consuming `self`. Equivalent to `Option::expect`.
-
-# Panics
-
-Panics if the value is a `{}` with a custom panic message provided by `msg`.",
-            name, none_ident,
-        );
-        // can't be c_func right now because of `panic`'s formatting. std uses nightly-only functions from feature(core_panic)
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #func expect(self, msg: &str) -> #some_ty {
-                match self {
-                    #some_x => x,
-                    _ => panic!("{}", msg),
-                }
-            }
-        });
-    }
-
-    // unwrap
-    {
-        let msg = format!("called `{}::unwrap()` on a `{}` value", name, none_ident);
-        let doc = format!(
-            "Returns the contained `{}` value, consuming `self`. Equivalent to `Option::unwrap`.
-
-# Panics
-
-Panics if the value is a `{}`.",
-            name, none_ident,
-        );
-        // can't be c_func right now because of `panic`'s formatting. std uses nightly-only functions from feature(core_panic)
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #func unwrap(self) -> #some_ty {
-                match self {
-                    #some_x => x,
-                    _ => panic!("{}", #msg),
-                }
-            }
-        });
-    }
-
-    // unwrap_or
-    {
-        let doc = format!(
-            "Returns the contained `{}` value or a provided default. Equivalent to `Option::unwrap_or`.",
-            name,
-        );
-        // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #func unwrap_or(self, default: #some_ty) -> #some_ty {
-                match self {
-                    #some_x => x,
-                    _ => default,
-                }
-            }
-        });
-    }
-
-    // unwrap_or_else
-    {
-        let doc = format!(
-            "Returns the contained `{}` value or computes it from a closure. Equivalent to `Option::unwrap_or_else`.",
-            name,
-        );
-        // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #func unwrap_or_else<F>(self, f: F) -> #some_ty
-            where
-                F: FnOnce() -> #some_ty,
-            {
-                match self {
-                    #some_x => x,
-                    _ => f(),
-                }
-            }
-        });
-    }
-
-    // unwrap_or_default
-    {
-        let doc = format!(
-            "Returns the contained `{}` value or its default. Equivalent to `Option::unwrap_or_default`.",
-            name,
-        );
-        // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #func unwrap_or_default(self) -> #some_ty
-            where
-                #some_ty: ::std::default::Default,
-            {
-                match self {
-                    #some_x => x,
-                    _ => ::std::default::Default::default(),
-                }
-            }
-        });
-    }
-
-    // unwrap_unchecked
-    {
-        let doc = format!(
-            "Returns the contained `{}` value without checking, consuming `self`. Equivalent to `Option::unwrap_unchecked`.
-            
-# Safety
-
-The caller must guarantee that the value is a `{}`. Otherwise, undefined behavior occurs.",
-            name, some_ident,
-        );
-        // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            pub unsafe fn unwrap_unchecked(self) -> #some_ty {
-                match self {
-                    #some_x => x,
-                    // SAFETY: the safety contract must be upheld by the caller.
-                    _ => unsafe { ::std::hint::unreachable_unchecked() },
-                }
-            }
-        });
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    // Transforming contained values
-    /////////////////////////////////////////////////////////////////////////
-
-    // map
-    if is_generic {
-        let value = some_pattern(quote! {f(x)});
-        let doc = format!(
-            "Maps an `{0}<{1}>` to `{0}<U>` by applying a function to a contained value. Equivalent to `Option::map`.",
-            name, some_ty_name,
-        );
-        // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #func map<U, F>(self, f: F) -> #name<U>
-            where
-                F: FnOnce(#some_ty) -> U,
-            {
-                match self {
-                    #some_x => #value,
-                    _ => #none_pattern,
-                }
-            }
-        });
-    }
-
-    // inspect
-    // unstable
-
-    // map_or
-    if is_generic {
-        let doc = format!(
-            "Applies a function to the contained value (if any), or returns a default (if not). Equivalent to `Option::map_or`.",
-        );
-        // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #func map_or<U, F>(self, default: U, f: F) -> U
-            where
-                F: FnOnce(#some_ty) -> U,
-            {
-                match self {
-                    #some_x => f(x),
-                    _ => default,
-                }
-            }
-        });
-    }
-
-    // map_or_else
-    if is_generic {
-        let doc = format!(
-            "Applies a function to the contained value (if any), or computes a default (if not). Equivalent to `Option::map_or_else`.",
-        );
-        // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #func map_or_else<U, D, F>(self, default: D, f: F) -> U
-            where
-                D: FnOnce() -> U,
-                F: FnOnce(#some_ty) -> U,
-            {
-                match self {
-                    #some_x => f(x),
-                    _ => default(),
-                }
-            }
-        });
-    }
-
-    // ok_or
-    {
-        let doc = format!(
-            "Transforms the `{}` into a `Result<{}, E>`, mapping `{}` to `Ok(x)` and `{}` to `Err(err)`. Equivalent to `Option::ok_or`.",
-            name, some_ty_name, some_x, none_pattern,
-        );
-        // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #func ok_or<E>(self, err: E) -> ::std::result::Result<#some_ty, E> {
-                match self {
-                    #some_x => ::std::result::Result::Ok(x),
-                    _ => ::std::result::Result::Err(err),
-                }
-            }
-        });
-    }
-
-    // ok_or_else
-    {
-        let doc = format!(
-            "Transforms the `{}` into a `Result<{}, E>`, mapping `{}` to `Ok(x)` and `{}` to `Err(err())`. Equivalent to `Option::ok_or_else`.",
-            name, some_ty_name, some_x, none_pattern,
-        );
-        // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #func ok_or_else<E, F>(self, err: F) -> ::std::result::Result<#some_ty, E>
-            where
-                F: FnOnce() -> E,
-            {
-                match self {
-                    #some_x => ::std::result::Result::Ok(x),
-                    _ => ::std::result::Result::Err(err()),
-                }
-            }
-        });
-    }
-
-    // as_deref
-    if is_generic {
-        let value = some_pattern(quote! {x.deref()});
-        let doc = format!(
-            "Creates a `{0}<&{1}::Target>` from an `&{0}<{1}>`. Equivalent to `Option::as_deref`.",
-            name, some_ty_name,
-        );
-        // can't be c_func right now because of trait bounds (https://github.com/rust-lang/rust/issues/67792)
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #func as_deref(&self) -> #name<&<#some_ty as ::std::ops::Deref>::Target>
-            where
-                #some_ty: ::std::ops::Deref,
-            {
-                match self.as_ref() {
-                    #some_x => #value,
-                    _ => #none_pattern,
-                }
-            }
-        });
-    }
-
-    // as_deref_mut
-    if is_generic {
-        let value = some_pattern(quote! {x.deref_mut()});
-        let doc = format!(
-            "Creates a `{0}<&mut {1}::Target>` from an `&mut {0}<{1}>`. Equivalent to `Option::as_deref_mut`.",
-            name, some_ty_name,
-        );
-        // can't be c_func right now because of trait bounds (https://github.com/rust-lang/rust/issues/67792)
-        // and &mut (https://github.com/rust-lang/rust/issues/57349)
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #func as_deref_mut(&mut self) -> #name<&mut <#some_ty as ::std::ops::Deref>::Target>
-            where
-                #some_ty: ::std::ops::DerefMut,
-            {
-                match self.as_mut() {
-                    #some_x => #value,
-                    _ => #none_pattern,
-                }
-            }
-        });
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    // Iterator constructors
-    /////////////////////////////////////////////////////////////////////////
-
-    // iter
-    {
-        let doc = format!(
-            "Returns an iterator over the possibly contained value. Equivalent to `Option::iter`.",
-        );
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #func iter(&self) -> ::std::option::IntoIter<&#some_ty> {
-                self.as_option_ref().into_iter()
-            }
-        });
-    }
-
-    // iter_mut
-    {
-        let doc = format!(
-            "Returns a mutable iterator over the possibly contained value. Equivalent to `Option::iter_mut`.",
-        );
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #func iter_mut(&mut self) -> ::std::option::IntoIter<&mut #some_ty> {
-                self.as_option_mut().into_iter()
-            }
-        });
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    // Boolean operations on the values, eager and lazy
-    /////////////////////////////////////////////////////////////////////////
-
-    // and
-    {
-        let doc = format!(
-            "Returns `{1}` if the `{0}` is a `{1}`, otherwise returns `optb`. Equivalent to `Option::and`.",
-            name, none_ident,
-        );
-        if is_generic {
-            impl_block.extend(quote! {
-                #[doc = #doc]
-                #func and<U>(self, optb: #name<U>) -> #name<U> {
-                    match self {
-                        #some__ => optb,
-                        _ => #none_pattern,
-                    }
-                }
-            });
-        } else {
-            impl_block.extend(quote! {
-                #[doc = #doc]
-                #func and(self, optb: Self) -> Self {
-                    match self {
-                        #some__ => optb,
-                        _ => #none_pattern,
-                    }
-                }
-            });
-        }
-    }
-
-    // and_then
-    {
-        let doc = format!(
-            "Returns `{1}` if the `{0}` is a `{1}`, otherwise calls `f` and returns the result. Equivalent to `Option::and_then`.",
-            name, none_ident,
-        );
-        if is_generic {
-            impl_block.extend(quote! {
-                #[doc = #doc]
-                #func and_then<U, F>(self, f: F) -> #name<U>
-                where
-                    F: FnOnce(#some_ty) -> #name<U>,
-                {
-                    match self {
-                        #some_x => f(x),
-                        _ => #none_pattern,
-                    }
-                }
-            });
-        } else {
-            impl_block.extend(quote! {
-                #[doc = #doc]
-                #func and_then<F>(self, f: F) -> Self
-                where
-                    F: FnOnce(#some_ty) -> Self,
-                {
-                    match self {
-                        #some_x => f(x),
-                        _ => #none_pattern,
-                    }
-                }
-            });
-        }
-    }
-
-    // filter
-    {
-        let doc = format!(
-            "Returns a `{2}` if the `{0}` is a `{2}` and the contained value satisfies the predicate `pred`, otherwise returns `{1}`. Equivalent to `Option::filter`.",
-            name, none_ident, some_ident,
-        );
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #func filter<P>(self, pred: P) -> Self
-            where
-                P: FnOnce(&#some_ty) -> bool,
-            {
-                match self {
-                    #some_x if pred(&x) => #some_x,
-                    _ => #none_pattern,
-                }
-            }
-        });
-    }
-
-    // or
-    {
-        let doc = format!(
-            "Returns the `{0}` if it is a `{1}`, otherwise returns `optb`. Equivalent to `Option::or`.",
-            name, some_ident,
-        );
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #func or(self, optb: Self) -> Self {
-                match self {
-                    #some_x => #some_x,
-                    _ => optb,
-                }
-            }
-        });
-    }
-
-    // or_else
-    {
-        let doc = format!(
-            "Returns the `{0}` if it is a `{1}`, otherwise calls `f` and returns the result. Equivalent to `Option::or_else`.",
-            name, some_ident,
-        );
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #func or_else<F>(self, f: F) -> Self
-            where
-                F: FnOnce() -> Self,
-            {
-                match self {
-                    #some_x => #some_x,
-                    _ => f(),
-                }
-            }
-        });
-    }
-
-    // xor
-    {
-        let doc = format!(
-            "Returns `{1}` if exactly one of `self` or `optb` is a `{1}`, otherwise returns `{0}`. Equivalent to `Option::xor`.",
-            none_ident, some_ident,
-        );
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #func xor(self, optb: Self) -> Self {
-                match (self, optb) {
-                    (#some_x, #none_pattern) | (#none_pattern, #some_x) => #some_x,
-                    _ => #none_pattern,
-                }
-            }
-        });
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    // Entry-like operations to insert a value and return a reference
-    /////////////////////////////////////////////////////////////////////////
-
-    // insert
-    {
-        let doc = format!(
-            "Inserts a value into the `{}`, then returns a mutable reference to it. Equivalent to `Option::insert`.",
-            name
-        );
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #func insert(&mut self, x: #some_ty) -> &mut #some_ty {
-                *self = #some_x;
-                match self {
-                    #some_ref_mut_x => x,
-
-                    // SAFETY: a value was just inserted.
-                    _ => unsafe { ::std::hint::unreachable_unchecked() },
-                }
-            }
-        });
-    }
-
-    // get_or_insert
-    {
-        let doc = format!(
-            "Returns a mutable reference to the contained value, inserting the provided value if empty. Equivalent to `Option::get_or_insert`.",
-        );
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #func get_or_insert(&mut self, value: #some_ty) -> &mut #some_ty {
-                match self {
-                    #some_ref_mut_x => x,
-                    _ => self.insert(value),
-                }
-            }
-        });
-    }
-
-    // get_or_insert_default
-    {
-        let doc = format!(
-            "Returns a mutable reference to the contained value, inserting the default value if empty. Equivalent to `Option::get_or_insert_default`.",
-        );
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #func get_or_insert_default(&mut self) -> &mut #some_ty
-            where
-                #some_ty: ::std::default::Default,
-            {
-                self.get_or_insert_with(::std::default::Default::default)
-            }
-        });
-    }
-
-    // get_or_insert_with
-    {
-        let doc = format!(
-            "Returns a mutable reference to the contained value, inserting the result of the provided function if empty. Equivalent to `Option::get_or_insert_with`.",
-        );
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #func get_or_insert_with<F>(&mut self, f: F) -> &mut #some_ty
-            where
-                F: FnOnce() -> #some_ty,
-            {
-                match self {
-                    #some_ref_mut_x => x,
-                    _ => self.insert(f()),
-                }
-            }
-        });
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    // Misc
-    /////////////////////////////////////////////////////////////////////////
-
-    // take
-    {
-        let doc = format!(
-            "Replaces the `{}` with `{}` and returns the old value, if any. Equivalent to `Option::take`.",
-            name, none_ident,
-        );
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #func take(&mut self) -> Self {
-                ::std::mem::take(self)
-            }
-        });
-    }
-
-    // replace
-    {
-        let doc = format!(
-            "Replaces the actual value in the `{}` with the provided one, returning the old value, if any. Equivalent to `Option::replace`.",
-            name,
-        );
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #func replace(&mut self, x: #some_ty) -> Self {
-                ::std::mem::replace(self, #some_x)
-            }
-        });
-    }
-
-    // contains
-    {
-        let doc = format!(
-            "Returns `true` if the `{}` contains the given value. Equivalent to `Option::contains`.",
-            name,
-        );
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #func contains(&self, x: &#some_ty) -> bool
-            where
-                #some_ty: ::std::cmp::PartialEq,
-            {
-                match self {
-                    #some_y => ::std::cmp::PartialEq::eq(x, y),
-                    _ => false,
-                }
-            }
-        });
-    }
-
-    // zip
-    if is_generic {
-        let doc = format!(
-            "zips `self` with another `{}` and returns the pair of contained values if both are `{}`s. Equivalent to `Option::zip`.",
-            name, some_ident,
-        );
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #func zip<U>(self, other: #name<U>) -> #name<(#some_ty, U)> {
-                match (self, other) {
-                    (#some_x, #some_y) => #some_xy,
-                    _ => #none_pattern,
-                }
-            }
-        });
-    }
-
-    // zip_with
-    {
-        let doc = format!(
-            "zips `self` with another `{}` and returns the result of the provided function if both are `{}`s. Equivalent to `Option::zip_with`.",
-            name, some_ident,
-        );
-        let pattern = some_pattern(quote! {f(x, y)});
-        if is_generic {
-            impl_block.extend(quote! {
-                #[doc = #doc]
-                #func zip_with<U, F, R>(self, other: #name<U>, f: F) -> #name<R>
-                where
-                    F: FnOnce(#some_ty, U) -> R,
-                {
-                    match (self, other) {
-                        (#some_x, #some_y) => #pattern,
-                        _ => #none_pattern,
-                    }
-                }
-            });
-        } else {
-            impl_block.extend(quote! {
-                #[doc = #doc]
-                #func zip_with<F>(self, other: Self, f: F) -> Self
-                where
-                    F: FnOnce(#some_ty, #some_ty) -> #some_ty,
-                {
-                    match (self, other) {
-                        (#some_x, #some_y) => #pattern,
-                        _ => #none_pattern,
-                    }
-                }
-            });
-        }
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    // TODO: unzip on #name<(#some_ty, U)>
-    // TODO: copied on #name<&#some_ty> where #some_ty: Copy
-    // TODO: cloned on #name<&#some_ty> where #some_ty: Clone
-    // TODO: copied on #name<&mut #some_ty> where #some_ty: Copy
-    // TODO: cloned on #name<&mut #some_ty> where #some_ty: Clone
-    // TODO: transpose on #name<Result<#some_ty, E>>
-    // TODO: transpose on #name<Option<#some_ty>>
-    // TODO: transpose on Option<#name<#some_ty>>
-    // TODO: flatten on #name<#name<#some_ty>>
-    // TODO: flatten on #name<Option<#some_ty>> -> #name<#some_ty>
-    // TODO: flatten on Option<#name<#some_ty>> -> #name<#some_ty>
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    // as_option_ref
-    {
-        let doc = format!(
-            "Converts from `&{name}<{ty}>` to `Option<&{ty}>`.",
-            name = name,
-            ty = some_ty_name,
-        );
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #c_func as_option_ref(&self) -> ::std::option::Option<&#some_ty> {
-                match *self {
-                    #some_ref_x => ::std::option::Option::Some(x),
-                    _ => ::std::option::Option::None,
-                }
-            }
-        });
-    }
-
-    // as_option_mut
-    {
-        let doc = format!(
-            "Converts from `&mut {name}<{ty}>` to `Option<&mut {ty}>`.",
-            name = name,
-            ty = some_ty_name,
-        );
-        impl_block.extend(quote! {
-            #[doc = #doc]
-            #func as_option_mut(&mut self) -> ::std::option::Option<&mut #some_ty> {
-                match *self {
-                    #some_ref_mut_x => ::std::option::Option::Some(x),
-                    _ => ::std::option::Option::None,
-                }
-            }
-        });
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
     let mut additional_impls = TokenStream::new();
 
-    // Self: From<#some_ty>
-    {
-        let doc = format!("Moves the value into a `{}`.", some_ident,);
-        additional_impls.extend(quote! {
-            #imp ::std::convert::From<#some_ty> for #full_name #wheres {
-                #[doc = #doc]
-                fn from(x: #some_ty) -> Self {
-                    #some_x
-                }
-            }
-        });
-    }
+    sections::additions::add_section(&container, &mut impl_block);
+    sections::bool_ops::add_section(&container, &mut impl_block);
+    sections::entry_ops::add_section(&container, &mut impl_block);
+    sections::get_contained::add_section(&container, &mut impl_block);
+    sections::iters::add_section(&container, &mut impl_block);
+    sections::misc::add_section(&container, &mut impl_block);
+    sections::querying::add_section(&container, &mut impl_block);
+    sections::ref_adapters::add_section(&container, &mut impl_block);
+    sections::transformers::add_section(&container, &mut impl_block);
 
-    // Self: From<Option>
-    {
-        let value = some_pattern(quote! {x});
-        additional_impls.extend(quote! {
-            #imp ::std::convert::From<::std::option::Option<#some_ty>> for #full_name #wheres {
-                fn from(src: ::std::option::Option<#some_ty>) -> Self {
-                    match src {
-                        ::std::option::Option::Some(x) => #value,
-                        _ => #none_pattern,
-                    }
-                }
-            }
-        });
-    }
+    external::traits::add_external(&container, &mut additional_impls);
+    external::impls::add_external(&container, &mut additional_impls);
 
-    // Option: From<Self>
-    {
-        let pattern = some_pattern(quote! {x});
-        additional_impls.extend(quote! {
-            #imp ::std::convert::From<#full_name> for ::std::option::Option<#some_ty> #wheres {
-                fn from(src: #full_name) -> Self {
-                    match src {
-                        #pattern => ::std::option::Option::Some(x),
-                        _ => ::std::option::Option::None,
-                    }
-                }
-            }
-        });
-    }
-
-    // Self: Default
-    {
-        let doc = format!(
-            "Returns a `{}` value. Equivalent to `Option::default`.",
-            none_ident,
-        );
-        additional_impls.extend(quote! {
-            #imp ::std::default::Default for #full_name #wheres {
-                #[doc = #doc]
-                fn default() -> Self {
-                    #none_pattern
-                }
-            }
-        });
-    }
-
-    // Self: IntoIterator
-    {
-        let doc = format!(
-            "Returns an iterator over the possibly contained value. Equivalent to `Option::into_iter`.",
-        );
-        additional_impls.extend(quote! {
-            #imp ::std::iter::IntoIterator for #full_name #wheres {
-                type Item = #some_ty;
-                type IntoIter = ::std::option::IntoIter<#some_ty>;
-
-                #[doc = #doc]
-                fn into_iter(self) -> Self::IntoIter {
-                    ::std::option::Option::from(self).into_iter()
-                }
-            }
-        });
-    }
-
-    // Self: PartialEq<Self>
-    {
-        let doc = format!(
-            "This method tests for `self` and `other` values to be equal, and is used by `==`. Equivalent to `Option::eq`.",
-        );
-        additional_impls.extend(quote! {
-            #imp ::std::cmp::PartialEq<#full_name> for #full_name
-            #where_clause
-                #some_ty: ::std::cmp::PartialEq,
-            {
-                #[doc = #doc]
-                fn eq(&self, other: &#full_name) -> bool {
-                    match (self, other) {
-                        (#some_x, #some_y) => ::std::cmp::PartialEq::eq(x, y),
-                        (#none_pattern, #none_pattern) => true,
-                        _ => false,
-                    }
-                }
-            }
-        });
-    }
-
-    // Self: std::ops::Try
-    // unstable
+    let DataContainer {
+        full_name,
+        imp,
+        wheres,
+        ..
+    } = container;
 
     Ok(quote! {
         #imp #full_name #wheres {
