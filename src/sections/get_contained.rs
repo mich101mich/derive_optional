@@ -19,12 +19,12 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     // expect
     {
         let doc = format!(
-            "Returns the contained `{}` value, consuming `self`. Equivalent to `Option::expect`.
+            "Returns the contained `{some}` value, consuming `self`. Equivalent to `Option::expect`.
 
 # Panics
 
-Panics if the value is a `{}` with a custom panic message provided by `msg`.",
-            name, none_ident,
+Panics if the value is a `{none}` with a custom panic message provided by `msg`.",
+            some = some_ident, none = none_ident,
         );
         // can't be c_func right now because of `panic`'s formatting. std uses nightly-only functions from feature(core_panic)
         impl_block.extend(quote! {
@@ -40,14 +40,18 @@ Panics if the value is a `{}` with a custom panic message provided by `msg`.",
 
     // unwrap
     {
-        let msg = format!("called `{}::unwrap()` on a `{}` value", name, none_ident);
+        let msg = format!(
+            "called `{name}::unwrap()` on a `{none}` value",
+            name = name,
+            none = none_ident
+        );
         let doc = format!(
-            "Returns the contained `{}` value, consuming `self`. Equivalent to `Option::unwrap`.
+            "Returns the contained `{some}` value, consuming `self`. Equivalent to `Option::unwrap`.
 
 # Panics
 
-Panics if the value is a `{}`.",
-            name, none_ident,
+Panics if the value is a `{none}`.",
+            some = some_ident, none = none_ident,
         );
         // can't be c_func right now because of `panic`'s formatting. std uses nightly-only functions from feature(core_panic)
         impl_block.extend(quote! {
@@ -64,8 +68,8 @@ Panics if the value is a `{}`.",
     // unwrap_or
     {
         let doc = format!(
-            "Returns the contained `{}` value or a provided default. Equivalent to `Option::unwrap_or`.",
-            name,
+            "Returns the contained `{some}` value or a provided default. Equivalent to `Option::unwrap_or`.",
+            some = some_ident,
         );
         // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
         impl_block.extend(quote! {
@@ -82,8 +86,8 @@ Panics if the value is a `{}`.",
     // unwrap_or_else
     {
         let doc = format!(
-            "Returns the contained `{}` value or computes it from a closure. Equivalent to `Option::unwrap_or_else`.",
-            name,
+            "Returns the contained `{some}` value or computes it from a closure. Equivalent to `Option::unwrap_or_else`.",
+            some = some_ident,
         );
         // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
         impl_block.extend(quote! {
@@ -103,8 +107,8 @@ Panics if the value is a `{}`.",
     // unwrap_or_default
     {
         let doc = format!(
-            "Returns the contained `{}` value or its default. Equivalent to `Option::unwrap_or_default`.",
-            name,
+            "Returns the contained `{some}` value or its default. Equivalent to `Option::unwrap_or_default`.",
+            some = some_ident,
         );
         // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
         impl_block.extend(quote! {
@@ -124,12 +128,12 @@ Panics if the value is a `{}`.",
     // unwrap_unchecked
     {
         let doc = format!(
-            "Returns the contained `{}` value without checking, consuming `self`. Equivalent to `Option::unwrap_unchecked`.
+            "Returns the contained `{some}` value without checking, consuming `self`. Equivalent to `Option::unwrap_unchecked`.
             
 # Safety
 
-The caller must guarantee that the value is a `{}`. Otherwise, undefined behavior occurs.",
-            name, some_ident,
+The caller must guarantee that the value is a `{some}`. Otherwise, undefined behavior occurs.",
+            some = some_ident,
         );
         // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
         impl_block.extend(quote! {

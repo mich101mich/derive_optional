@@ -3,6 +3,8 @@ use super::*;
 pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStream) {
     let DataContainer {
         ref name,
+        ref full_name,
+        ref full_name_string,
         ref some_ident,
         ref none_ident,
         ref some_snake,

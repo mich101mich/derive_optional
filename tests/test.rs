@@ -1,3 +1,20 @@
+mod generic {}
+
+mod specific {
+    mod external {}
+    mod sections {
+        mod additions;
+        mod bool_ops;
+        mod entry_ops;
+        mod get_contained;
+        mod iters;
+        mod misc;
+        mod querying;
+        mod ref_adapters;
+        mod transformers;
+    }
+}
+
 use derive_optional::Optional;
 #[derive(Optional, Clone, Copy)]
 enum HasChanged<T> {

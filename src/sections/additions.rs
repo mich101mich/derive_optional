@@ -2,7 +2,7 @@ use super::*;
 
 pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStream) {
     let DataContainer {
-        ref name,
+        ref full_name_string,
         ref some_ty,
         ref some_ty_name,
         ref func,
@@ -16,8 +16,8 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     // as_option_ref
     {
         let doc = format!(
-            "Converts from `&{name}<{ty}>` to `Option<&{ty}>`.",
-            name = name,
+            "Converts from `&{name}` to `Option<&{ty}>`.",
+            name = full_name_string,
             ty = some_ty_name,
         );
         impl_block.extend(quote! {
@@ -34,8 +34,8 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     // as_option_mut
     {
         let doc = format!(
-            "Converts from `&mut {name}<{ty}>` to `Option<&mut {ty}>`.",
-            name = name,
+            "Converts from `&mut {name}` to `Option<&mut {ty}>`.",
+            name = full_name_string,
             ty = some_ty_name,
         );
         impl_block.extend(quote! {

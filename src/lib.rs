@@ -56,6 +56,7 @@ mod external {
 pub(crate) struct DataContainer {
     name: Ident,
     full_name: TokenStream,
+    full_name_string: String,
     some_ident: Ident,
     none_ident: Ident,
     some_snake: String,
@@ -69,6 +70,7 @@ pub(crate) struct DataContainer {
     c_func: TokenStream,
     imp: TokenStream,
     wheres: TokenStream,
+    #[allow(dead_code)]
     where_clause: TokenStream,
 }
 
@@ -158,23 +160,15 @@ impl DataContainer {
 /// - `From<Option<T>> for Self`
 /// - `From<Self> for Option<T>`
 /// - `Self: Default`
-/// - `Self: PartialEq` if `T: PartialEq`
-/// - `Self: Eq` if `T: Eq`
 ///
 /// ## Things that were **not** added
-/// - `PartialOrd` and `Ord` because the ordering between `Some` and `None` is not clear here
-/// - `Debug`, `Clone`, `Copy`, `Hash` because they require a choice if they are necessary
-///   and can be derived if needed
 /// - unstable or nightly-only methods and traits
 ///   - this sadly includes the try (`?`) operator
 #[proc_macro_derive(Optional)]
 pub fn optional(input: TokenStream1) -> TokenStream1 {
     let input = syn::parse_macro_input!(input as syn::DeriveInput);
     match optional_internal(input) {
-        Ok(s) => {
-            println!("{}", s);
-            s.into()
-        }
+        Ok(s) => s.into(),
         Err(e) => e.into(),
     }
 }
@@ -185,6 +179,7 @@ fn optional_internal(input: syn::DeriveInput) -> Result<TokenStream> {
     let generics = input.generics;
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
     let full_name = quote! {#name #ty_generics};
+    let full_name_string = full_name.to_string().replace(' ', "");
     let imp = quote! {impl #impl_generics};
     let wheres = where_clause
         .map(|c| c.to_token_stream())
@@ -272,6 +267,7 @@ fn optional_internal(input: syn::DeriveInput) -> Result<TokenStream> {
     let container = DataContainer {
         name,
         full_name,
+        full_name_string,
         some_ident,
         none_ident,
         some_snake,

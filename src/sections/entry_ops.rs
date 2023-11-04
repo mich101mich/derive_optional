@@ -18,8 +18,8 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     // insert
     {
         let doc = format!(
-            "Inserts a value into the `{}`, then returns a mutable reference to it. Equivalent to `Option::insert`.",
-            name
+            "Inserts a value into the `{name}`, then returns a mutable reference to it. Equivalent to `Option::insert`.",
+            name = name
         );
         impl_block.extend(quote! {
             #[doc = #doc]

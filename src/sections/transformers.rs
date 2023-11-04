@@ -3,6 +3,7 @@ use super::*;
 pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStream) {
     let DataContainer {
         ref name,
+        ref full_name_string,
         ref none_pattern,
         ref some_ty,
         ref some_ty_name,
@@ -21,8 +22,8 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     if is_generic {
         let value = container.some(quote! {f(x)});
         let doc = format!(
-            "Maps an `{0}<{1}>` to `{0}<U>` by applying a function to a contained value. Equivalent to `Option::map`.",
-            name, some_ty_name,
+            "Maps an `{name}<{ty}>` to `{name}<U>` by applying a function to a contained value. Equivalent to `Option::map`.",
+            name = name, ty = some_ty_name,
         );
         // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
         impl_block.extend(quote! {
@@ -45,7 +46,7 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     // map_or
     if is_generic {
         let doc = format!(
-            "Applies a function to the contained value (if any), or returns a default (if not). Equivalent to `Option::map_or`.",
+            "Applies a function to the contained value (if any), or returns the provided default (if not). Equivalent to `Option::map_or`.",
         );
         // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
         impl_block.extend(quote! {
@@ -65,7 +66,7 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     // map_or_else
     if is_generic {
         let doc = format!(
-            "Applies a function to the contained value (if any), or computes a default (if not). Equivalent to `Option::map_or_else`.",
+            "Applies a function to the contained value (if any), or calls the provided function to compute a default (if not). Equivalent to `Option::map_or_else`.",
         );
         // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
         impl_block.extend(quote! {
@@ -86,8 +87,8 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     // ok_or
     {
         let doc = format!(
-            "Transforms the `{}` into a `Result<{}, E>`, mapping `{}` to `Ok(x)` and `{}` to `Err(err)`. Equivalent to `Option::ok_or`.",
-            name, some_ty_name, some_x, none_pattern,
+            "Transforms the `{name}` into a `Result<{ty}, E>`, mapping `{some}` to `Ok(x)` and `{none}` to `Err(err)`. Equivalent to `Option::ok_or`.",
+            name = full_name_string, ty = some_ty_name, some = some_x, none = none_pattern,
         );
         // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
         impl_block.extend(quote! {
@@ -104,8 +105,8 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     // ok_or_else
     {
         let doc = format!(
-            "Transforms the `{}` into a `Result<{}, E>`, mapping `{}` to `Ok(x)` and `{}` to `Err(err())`. Equivalent to `Option::ok_or_else`.",
-            name, some_ty_name, some_x, none_pattern,
+            "Transforms the `{name}` into a `Result<{ty}, E>`, mapping `{some}` to `Ok(x)` and `{none}` to `Err(err())`. Equivalent to `Option::ok_or_else`.",
+            name = full_name_string, ty = some_ty_name, some = some_x, none = none_pattern,
         );
         // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
         impl_block.extend(quote! {
@@ -126,8 +127,8 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     if is_generic {
         let value = container.some(quote! {x.deref()});
         let doc = format!(
-            "Creates a `{0}<&{1}::Target>` from an `&{0}<{1}>`. Equivalent to `Option::as_deref`.",
-            name, some_ty_name,
+            "Creates a `{name}<&{ty}::Target>` from an `&{name}<{ty}>`. Equivalent to `Option::as_deref`.",
+            name = name, ty = some_ty_name,
         );
         // can't be c_func right now because of trait bounds (https://github.com/rust-lang/rust/issues/67792)
         impl_block.extend(quote! {
@@ -148,8 +149,8 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     if is_generic {
         let value = container.some(quote! {x.deref_mut()});
         let doc = format!(
-            "Creates a `{0}<&mut {1}::Target>` from an `&mut {0}<{1}>`. Equivalent to `Option::as_deref_mut`.",
-            name, some_ty_name,
+            "Creates a `{name}<&mut {ty}::Target>` from an `&mut {name}<{ty}>`. Equivalent to `Option::as_deref_mut`.",
+            name = name, ty = some_ty_name,
         );
         // can't be c_func right now because of trait bounds (https://github.com/rust-lang/rust/issues/67792)
         // and &mut (https://github.com/rust-lang/rust/issues/57349)

@@ -7,6 +7,7 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
         ref none_ident,
         ref none_pattern,
         ref some_ty,
+        ref some_ty_name,
         is_generic,
         ref func,
         ..
@@ -23,8 +24,8 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     // take
     {
         let doc = format!(
-            "Replaces the `{}` with `{}` and returns the old value, if any. Equivalent to `Option::take`.",
-            name, none_ident,
+            "Takes the actual value out of the `{name}`, leaving a `{none}` in its place. Equivalent to `Option::take`.",
+            name = name, none = none_ident,
         );
         impl_block.extend(quote! {
             #[doc = #doc]
@@ -37,8 +38,8 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     // replace
     {
         let doc = format!(
-            "Replaces the actual value in the `{}` with the provided one, returning the old value, if any. Equivalent to `Option::replace`.",
-            name,
+            "Replaces the actual value in the `{name}` with the provided one, returning the old value, if any. Equivalent to `Option::replace`.",
+            name = name,
         );
         impl_block.extend(quote! {
             #[doc = #doc]
@@ -51,8 +52,8 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     // contains
     {
         let doc = format!(
-            "Returns `true` if the `{}` contains the given value. Equivalent to `Option::contains`.",
-            name,
+            "Returns `true` if the `{name}` contains the given value. Equivalent to `Option::contains`.",
+            name = name,
         );
         impl_block.extend(quote! {
             #[doc = #doc]
@@ -71,8 +72,8 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     // zip
     if is_generic {
         let doc = format!(
-            "zips `self` with another `{}` and returns the pair of contained values if both are `{}`s. Equivalent to `Option::zip`.",
-            name, some_ident,
+            "zips `self` with another `{name}` and returns the pair of contained values if both are `{some}`s. Equivalent to `Option::zip`.",
+            name = name, some = some_ident,
         );
         impl_block.extend(quote! {
             #[doc = #doc]
@@ -87,12 +88,12 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
 
     // zip_with
     {
-        let doc = format!(
-            "zips `self` with another `{}` and returns the result of the provided function if both are `{}`s. Equivalent to `Option::zip_with`.",
-            name, some_ident,
-        );
         let pattern = container.some(quote! {f(x, y)});
         if is_generic {
+            let doc = format!(
+                "zips `self` with another `{name}` and returns the result of the provided function if both are `{some}`s. Equivalent to `Option::zip_with`.",
+                name = name, some = some_ident,
+            );
             impl_block.extend(quote! {
                 #[doc = #doc]
                 #func zip_with<U, F, R>(self, other: #name<U>, f: F) -> #name<R>
@@ -106,6 +107,10 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
                 }
             });
         } else {
+            let doc = format!(
+                "zips `self` with another `{name}` and returns the result of the provided function if both are `{some}`s. Note that, since `{name}` is not generic over its inner type, the function is required to return `{ty}`. Equivalent to `Option::zip_with`.",
+                name = name, some = some_ident, ty = some_ty_name,
+            );
             impl_block.extend(quote! {
                 #[doc = #doc]
                 #func zip_with<F>(self, other: Self, f: F) -> Self
