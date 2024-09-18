@@ -1,18 +1,17 @@
 use super::*;
 
 pub(crate) fn add_external(container: &DataContainer, additional_impls: &mut TokenStream) {
+    #[allow(unused_variables)]
+    #[rustfmt::skip]
     let DataContainer {
-        ref full_name,
-        ref some_ident,
-        ref none_ident,
-        ref none_pattern,
-        ref some_ty,
-        ref imp,
-        ref wheres,
+        ref name, ref full_name, ref full_name_string,
+        ref some_ident, ref none_ident, ref some_snake, ref none_snake, ref none_pattern,
+        ref some_ty, ref some_field_ident, ref some_ty_name, is_generic,
+        ref imp, ref wheres, ref where_clause,
+        ref some_x, ref some_ref_x, ref some_ref_mut_x, ref some__, ref some_y, ref some_xy,
+        ref func, ref c_func, ref opt,
         ..
     } = *container;
-
-    let some_x = container.some(quote! {x});
 
     // Self: From<#some_ty>
     {
@@ -29,12 +28,11 @@ pub(crate) fn add_external(container: &DataContainer, additional_impls: &mut Tok
 
     // Self: From<Option>
     {
-        let value = container.some(quote! {x});
         additional_impls.extend(quote! {
-            #imp ::std::convert::From<::std::option::Option<#some_ty>> for #full_name #wheres {
-                fn from(src: ::std::option::Option<#some_ty>) -> Self {
+            #imp ::std::convert::From<#opt<#some_ty>> for #full_name #wheres {
+                fn from(src: #opt<#some_ty>) -> Self {
                     match src {
-                        ::std::option::Option::Some(x) => #value,
+                        #opt::Some(x) => #some_x,
                         _ => #none_pattern,
                     }
                 }
@@ -44,13 +42,12 @@ pub(crate) fn add_external(container: &DataContainer, additional_impls: &mut Tok
 
     // Option: From<Self>
     {
-        let pattern = container.some(quote! {x});
         additional_impls.extend(quote! {
-            #imp ::std::convert::From<#full_name> for ::std::option::Option<#some_ty> #wheres {
+            #imp ::std::convert::From<#full_name> for #opt<#some_ty> #wheres {
                 fn from(src: #full_name) -> Self {
                     match src {
-                        #pattern => ::std::option::Option::Some(x),
-                        _ => ::std::option::Option::None,
+                        #some_x => #opt::Some(x),
+                        _ => #opt::None,
                     }
                 }
             }
@@ -85,7 +82,7 @@ pub(crate) fn add_external(container: &DataContainer, additional_impls: &mut Tok
 
                 #[doc = #doc]
                 fn into_iter(self) -> Self::IntoIter {
-                    ::std::option::Option::from(self).into_iter()
+                    #opt::from(self).into_iter()
                 }
             }
         });

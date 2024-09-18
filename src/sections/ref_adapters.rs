@@ -1,20 +1,17 @@
 use super::*;
 
 pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStream) {
+    #[allow(unused_variables)]
+    #[rustfmt::skip]
     let DataContainer {
-        ref name,
-        ref none_pattern,
-        ref some_ty,
-        ref some_ty_name,
-        is_generic,
-        ref func,
-        ref c_func,
+        ref name, ref full_name, ref full_name_string,
+        ref some_ident, ref none_ident, ref some_snake, ref none_snake, ref none_pattern,
+        ref some_ty, ref some_field_ident, ref some_ty_name, is_generic,
+        ref imp, ref wheres, ref where_clause,
+        ref some_x, ref some_ref_x, ref some_ref_mut_x, ref some__, ref some_y, ref some_xy,
+        ref func, ref c_func, ref opt,
         ..
     } = *container;
-
-    let some_x = container.some(quote! {x});
-    let some_ref_x = container.some(quote! {ref x});
-    let some_ref_mut_x = container.some(quote! {ref mut x});
 
     /////////////////////////////////////////////////////////////////////////
     // Adapter for working with references

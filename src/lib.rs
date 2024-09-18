@@ -66,12 +66,21 @@ pub(crate) struct DataContainer {
     some_field_ident: Option<Ident>,
     some_ty_name: String,
     is_generic: bool,
-    func: TokenStream,
-    c_func: TokenStream,
     imp: TokenStream,
     wheres: TokenStream,
     #[allow(dead_code)]
     where_clause: TokenStream,
+
+    some_x: TokenStream,
+    some_ref_x: TokenStream,
+    some_ref_mut_x: TokenStream,
+    some__: TokenStream,
+    some_y: TokenStream,
+    some_xy: TokenStream,
+
+    func: TokenStream,
+    c_func: TokenStream,
+    opt: TokenStream,
 }
 
 impl DataContainer {
@@ -253,9 +262,6 @@ fn optional_internal(input: syn::DeriveInput) -> Result<TokenStream> {
     let some_field_ident = some_field.ident;
     let some_ty_name = some_ty.to_token_stream().to_string();
 
-    let func = quote! {#[inline] pub fn};
-    let c_func = quote! {#[inline] pub const fn};
-
     let is_generic = generics.params.iter().any(|param| {
         if let syn::GenericParam::Type(ty) = param {
             ty.ident == some_ty_name
@@ -263,6 +269,24 @@ fn optional_internal(input: syn::DeriveInput) -> Result<TokenStream> {
             false
         }
     });
+
+    let make_some = |pattern: TokenStream| {
+        if let Some(ident) = some_field_ident.as_ref() {
+            quote! {#name::#some_ident { #ident: #pattern }}
+        } else {
+            quote! {#name::#some_ident(#pattern)}
+        }
+    };
+    let some_x = make_some(quote! {x});
+    let some_ref_x = make_some(quote! {ref x});
+    let some_ref_mut_x = make_some(quote! {ref mut x});
+    let some__ = make_some(quote! {..});
+    let some_y = make_some(quote! {y});
+    let some_xy = make_some(quote! {(x, y)});
+
+    let opt = quote! {::std::option::Option};
+    let func = quote! {#[inline] pub fn};
+    let c_func = quote! {#[inline] pub const fn};
 
     let container = DataContainer {
         name,
@@ -277,11 +301,20 @@ fn optional_internal(input: syn::DeriveInput) -> Result<TokenStream> {
         some_field_ident,
         some_ty_name,
         is_generic,
-        func,
-        c_func,
         imp,
         wheres,
         where_clause,
+
+        some_x,
+        some_ref_x,
+        some_ref_mut_x,
+        some__,
+        some_y,
+        some_xy,
+
+        func,
+        c_func,
+        opt,
     };
 
     let mut impl_block = TokenStream::new();
