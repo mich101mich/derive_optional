@@ -4,13 +4,9 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     #[allow(unused_variables)]
     #[rustfmt::skip]
     let DataContainer {
-        ref name, ref full_name, ref full_name_string,
-        ref some_ident, ref none_ident, ref some_snake, ref none_snake, ref none_pattern,
-        ref some_ty, ref some_field_ident, ref some_ty_name, is_generic,
-        ref imp, ref wheres, ref where_clause,
-        ref some_x, ref some_ref_x, ref some_ref_mut_x, ref some__, ref some_y, ref some_xy,
-        ref func, ref c_func, ref opt,
-        ..
+        ref name, ref full_name, ref full_name_string, ref some, ref none, ref some_name, ref none_name,
+        ref some_name_snake, ref none_name_snake, ref some_ty, ref some_ty_name, is_generic, ref bounds, ref imp,
+        ref func, ref c_func, ref opt
     } = *container;
 
     /////////////////////////////////////////////////////////////////////////
@@ -28,8 +24,8 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
             #[doc = #doc]
             #c_func as_ref(&self) -> #name<&#some_ty> {
                 match *self {
-                    #some_ref_x => #some_x,
-                    _ => #none_pattern,
+                    #some(ref x) => #some(x),
+                    _ => #none,
                 }
             }
         });
@@ -47,8 +43,8 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
             #[doc = #doc]
             #func as_mut(&mut self) -> #name<&mut #some_ty> {
                 match *self {
-                    #some_ref_mut_x => #some_x,
-                    _ => #none_pattern,
+                    #some(ref mut x) => #some(x),
+                    _ => #none,
                 }
             }
         });
@@ -56,7 +52,6 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
 
     // as_pin_ref
     if is_generic {
-        let value = container.some(quote! {::std::pin::Pin::new_unchecked(x)});
         let doc = format!(
             "Converts from `Pin<&{name}<{ty}>>` to `{name}<Pin<&{ty}>>`. Equivalent to `Option::as_pin_ref`.",
             name = name,
@@ -69,8 +64,8 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
                 match ::std::pin::Pin::get_ref(self).as_ref() {
                     // SAFETY: `x` is guaranteed to be pinned because it comes from `self`
                     // which is pinned.
-                    #some_x => unsafe { #value },
-                    _ => #none_pattern,
+                    #some(x) => unsafe { #some(::std::pin::Pin::new_unchecked(x)) },
+                    _ => #none,
                 }
             }
         });
@@ -78,7 +73,6 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
 
     // as_pin_mut
     if is_generic {
-        let value = container.some(quote! {::std::pin::Pin::new_unchecked(x)});
         let doc = format!(
             "Converts from `Pin<&mut {name}<{ty}>>` to `{name}<Pin<&mut {ty}>>`. Equivalent to `Option::as_pin_mut`.",
             name = name,
@@ -93,9 +87,41 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
                 // `x` is guaranteed to be pinned because it comes from `self` which is pinned.
                 unsafe {
                     match ::std::pin::Pin::get_unchecked_mut(self).as_mut() {
-                        #some_x => #value,
-                        _ => #none_pattern,
+                        #some(x) => #some(::std::pin::Pin::new_unchecked(x)),
+                        _ => #none,
                     }
+                }
+            }
+        });
+    }
+
+    // as_slice
+    {
+        let doc = format!(
+            "Returns a slice of the contained value, if any. Equivalent to `Option::as_slice`."
+        );
+        impl_block.extend(quote! {
+            #[doc = #doc]
+            #c_func as_slice(&self) -> &[#some_ty] {
+                match *self {
+                    #some(ref x) => ::std::slice::from_ref(x),
+                    _ => &[],
+                }
+            }
+        });
+    }
+
+    // as_mut_slice
+    {
+        let doc = format!(
+            "Returns a mutable slice of the contained value, if any. Equivalent to `Option::as_mut_slice`."
+        );
+        impl_block.extend(quote! {
+            #[doc = #doc]
+            #func as_mut_slice(&mut self) -> &mut [#some_ty] {
+                match *self {
+                    #some(ref mut x) => ::std::slice::from_mut(x),
+                    _ => &mut [],
                 }
             }
         });

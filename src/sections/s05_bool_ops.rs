@@ -4,13 +4,9 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     #[allow(unused_variables)]
     #[rustfmt::skip]
     let DataContainer {
-        ref name, ref full_name, ref full_name_string,
-        ref some_ident, ref none_ident, ref some_snake, ref none_snake, ref none_pattern,
-        ref some_ty, ref some_field_ident, ref some_ty_name, is_generic,
-        ref imp, ref wheres, ref where_clause,
-        ref some_x, ref some_ref_x, ref some_ref_mut_x, ref some__, ref some_y, ref some_xy,
-        ref func, ref c_func, ref opt,
-        ..
+        ref name, ref full_name, ref full_name_string, ref some, ref none, ref some_name, ref none_name,
+        ref some_name_snake, ref none_name_snake, ref some_ty, ref some_ty_name, is_generic, ref bounds, ref imp,
+        ref func, ref c_func, ref opt
     } = *container;
 
     /////////////////////////////////////////////////////////////////////////
@@ -21,15 +17,15 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     {
         let doc = format!(
             "Returns `{none}` if the `{name}` is a `{none}`, otherwise returns `optb`. Equivalent to `Option::and`.",
-            name = name, none = none_ident,
+            name = name, none = none_name,
         );
         if is_generic {
             impl_block.extend(quote! {
                 #[doc = #doc]
                 #func and<U>(self, optb: #name<U>) -> #name<U> {
                     match self {
-                        #some__ => optb,
-                        _ => #none_pattern,
+                        #some(_) => optb,
+                        _ => #none,
                     }
                 }
             });
@@ -38,8 +34,8 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
                 #[doc = #doc]
                 #func and(self, optb: Self) -> Self {
                     match self {
-                        #some__ => optb,
-                        _ => #none_pattern,
+                        #some(_) => optb,
+                        _ => #none,
                     }
                 }
             });
@@ -50,7 +46,7 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     {
         let doc = format!(
             "Returns `{name}` if the `{none}` is a `{name}`, otherwise calls `f` and returns the result. Equivalent to `Option::and_then`.",
-            name = name, none = none_ident,
+            name = name, none = none_name,
         );
         if is_generic {
             impl_block.extend(quote! {
@@ -60,8 +56,8 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
                     F: FnOnce(#some_ty) -> #name<U>,
                 {
                     match self {
-                        #some_x => f(x),
-                        _ => #none_pattern,
+                        #some(x) => f(x),
+                        _ => #none,
                     }
                 }
             });
@@ -73,8 +69,8 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
                     F: FnOnce(#some_ty) -> Self,
                 {
                     match self {
-                        #some_x => f(x),
-                        _ => #none_pattern,
+                        #some(x) => f(x),
+                        _ => #none,
                     }
                 }
             });
@@ -85,7 +81,7 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     {
         let doc = format!(
             "Returns a `{some}` if the `{name}` is a `{some}` and the contained value satisfies the predicate `pred`, otherwise returns `{none}`. Equivalent to `Option::filter`.",
-            name = name, none = none_ident, some = some_ident,
+            name = name, none = none_name, some = some_name,
         );
         impl_block.extend(quote! {
             #[doc = #doc]
@@ -94,8 +90,8 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
                 P: FnOnce(&#some_ty) -> bool,
             {
                 match self {
-                    #some_x if pred(&x) => #some_x,
-                    _ => #none_pattern,
+                    #some(x) if pred(&x) => #some(x),
+                    _ => #none,
                 }
             }
         });
@@ -105,13 +101,13 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     {
         let doc = format!(
             "Returns the `{name}` if it is a `{some}`, otherwise returns `optb`. Equivalent to `Option::or`.",
-            name = name, some = some_ident,
+            name = name, some = some_name,
         );
         impl_block.extend(quote! {
             #[doc = #doc]
             #func or(self, optb: Self) -> Self {
                 match self {
-                    #some_x => #some_x,
+                    #some(x) => #some(x),
                     _ => optb,
                 }
             }
@@ -122,7 +118,7 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     {
         let doc = format!(
             "Returns the `{name}` if it is a `{some}`, otherwise calls `f` and returns the result. Equivalent to `Option::or_else`.",
-            name = name, some = some_ident,
+            name = name, some = some_name,
         );
         impl_block.extend(quote! {
             #[doc = #doc]
@@ -131,7 +127,7 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
                 F: FnOnce() -> Self,
             {
                 match self {
-                    #some_x => #some_x,
+                    #some(x) => #some(x),
                     _ => f(),
                 }
             }
@@ -142,14 +138,14 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     {
         let doc = format!(
             "Returns `{some}` if exactly one of `self` or `optb` is a `{some}`, otherwise returns `{none}`. Equivalent to `Option::xor`.",
-            none = none_ident, some = some_ident,
+            none = none_name, some = some_name,
         );
         impl_block.extend(quote! {
             #[doc = #doc]
             #func xor(self, optb: Self) -> Self {
                 match (self, optb) {
-                    (#some_x, #none_pattern) | (#none_pattern, #some_x) => #some_x,
-                    _ => #none_pattern,
+                    (#some(x), #none) | (#none, #some(x)) => #some(x),
+                    _ => #none,
                 }
             }
         });

@@ -4,13 +4,9 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     #[allow(unused_variables)]
     #[rustfmt::skip]
     let DataContainer {
-        ref name, ref full_name, ref full_name_string,
-        ref some_ident, ref none_ident, ref some_snake, ref none_snake, ref none_pattern,
-        ref some_ty, ref some_field_ident, ref some_ty_name, is_generic,
-        ref imp, ref wheres, ref where_clause,
-        ref some_x, ref some_ref_x, ref some_ref_mut_x, ref some__, ref some_y, ref some_xy,
-        ref func, ref c_func, ref opt,
-        ..
+        ref name, ref full_name, ref full_name_string, ref some, ref none, ref some_name, ref none_name,
+        ref some_name_snake, ref none_name_snake, ref some_ty, ref some_ty_name, is_generic, ref bounds, ref imp,
+        ref func, ref c_func, ref opt
     } = *container;
 
     /////////////////////////////////////////////////////////////////////////
@@ -19,7 +15,6 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
 
     // map
     if is_generic {
-        let value = container.some(quote! {f(x)});
         let doc = format!(
             "Maps an `{name}<{ty}>` to `{name}<U>` by applying a function to a contained value. Equivalent to `Option::map`.",
             name = name, ty = some_ty_name,
@@ -32,8 +27,8 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
                 F: FnOnce(#some_ty) -> U,
             {
                 match self {
-                    #some_x => #value,
-                    _ => #none_pattern,
+                    #some(x) => #some(f(x)),
+                    _ => #none,
                 }
             }
         });
@@ -55,7 +50,7 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
                 F: FnOnce(#some_ty) -> U,
             {
                 match self {
-                    #some_x => f(x),
+                    #some(x) => f(x),
                     _ => default,
                 }
             }
@@ -76,7 +71,7 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
                 F: FnOnce(#some_ty) -> U,
             {
                 match self {
-                    #some_x => f(x),
+                    #some(x) => f(x),
                     _ => default(),
                 }
             }
@@ -86,15 +81,15 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     // ok_or
     {
         let doc = format!(
-            "Transforms the `{name}` into a `Result<{ty}, E>`, mapping `{some}` to `Ok(x)` and `{none}` to `Err(err)`. Equivalent to `Option::ok_or`.",
-            name = full_name_string, ty = some_ty_name, some = some_x, none = none_pattern,
+            "Transforms the `{name}` into a `Result<{ty}, E>`, mapping `{some}(x)` to `Ok(x)` and `{none}` to `Err(err)`. Equivalent to `Option::ok_or`.",
+            name = full_name_string, ty = some_ty_name, some = some_name, none = none_name,
         );
         // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
         impl_block.extend(quote! {
             #[doc = #doc]
             #func ok_or<E>(self, err: E) -> ::std::result::Result<#some_ty, E> {
                 match self {
-                    #some_x => ::std::result::Result::Ok(x),
+                    #some(x) => ::std::result::Result::Ok(x),
                     _ => ::std::result::Result::Err(err),
                 }
             }
@@ -104,8 +99,8 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     // ok_or_else
     {
         let doc = format!(
-            "Transforms the `{name}` into a `Result<{ty}, E>`, mapping `{some}` to `Ok(x)` and `{none}` to `Err(err())`. Equivalent to `Option::ok_or_else`.",
-            name = full_name_string, ty = some_ty_name, some = some_x, none = none_pattern,
+            "Transforms the `{name}` into a `Result<{ty}, E>`, mapping `{some}(x)` to `Ok(x)` and `{none}` to `Err(err())`. Equivalent to `Option::ok_or_else`.",
+            name = full_name_string, ty = some_ty_name, some = some_name, none = none_name,
         );
         // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
         impl_block.extend(quote! {
@@ -115,7 +110,7 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
                 F: FnOnce() -> E,
             {
                 match self {
-                    #some_x => ::std::result::Result::Ok(x),
+                    #some(x) => ::std::result::Result::Ok(x),
                     _ => ::std::result::Result::Err(err()),
                 }
             }
@@ -124,7 +119,6 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
 
     // as_deref
     if is_generic {
-        let value = container.some(quote! {x.deref()});
         let doc = format!(
             "Creates a `{name}<&{ty}::Target>` from an `&{name}<{ty}>`. Equivalent to `Option::as_deref`.",
             name = name, ty = some_ty_name,
@@ -137,8 +131,8 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
                 #some_ty: ::std::ops::Deref,
             {
                 match self.as_ref() {
-                    #some_x => #value,
-                    _ => #none_pattern,
+                    #some(x) => #some(x.deref()),
+                    _ => #none,
                 }
             }
         });
@@ -146,7 +140,6 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
 
     // as_deref_mut
     if is_generic {
-        let value = container.some(quote! {x.deref_mut()});
         let doc = format!(
             "Creates a `{name}<&mut {ty}::Target>` from an `&mut {name}<{ty}>`. Equivalent to `Option::as_deref_mut`.",
             name = name, ty = some_ty_name,
@@ -160,8 +153,8 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
                 #some_ty: ::std::ops::DerefMut,
             {
                 match self.as_mut() {
-                    #some_x => #value,
-                    _ => #none_pattern,
+                    #some(x) => #some(x.deref_mut()),
+                    _ => #none,
                 }
             }
         });

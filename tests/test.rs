@@ -3,15 +3,15 @@ mod generic {}
 mod specific {
     mod external {}
     mod sections {
-        mod additions;
-        mod bool_ops;
-        mod entry_ops;
-        mod get_contained;
-        mod iters;
-        mod misc;
-        mod querying;
-        mod ref_adapters;
-        mod transformers;
+        mod s01_querying;
+        mod s02_ref_adapters;
+        mod s03_get_contained;
+        mod s04_transformers;
+        mod s05_bool_ops;
+        mod s05_iters;
+        mod s06_entry_ops;
+        mod s07_misc;
+        mod s99_additions;
     }
 }
 

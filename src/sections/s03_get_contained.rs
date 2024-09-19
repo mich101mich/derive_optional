@@ -4,13 +4,9 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     #[allow(unused_variables)]
     #[rustfmt::skip]
     let DataContainer {
-        ref name, ref full_name, ref full_name_string,
-        ref some_ident, ref none_ident, ref some_snake, ref none_snake, ref none_pattern,
-        ref some_ty, ref some_field_ident, ref some_ty_name, is_generic,
-        ref imp, ref wheres, ref where_clause,
-        ref some_x, ref some_ref_x, ref some_ref_mut_x, ref some__, ref some_y, ref some_xy,
-        ref func, ref c_func, ref opt,
-        ..
+        ref name, ref full_name, ref full_name_string, ref some, ref none, ref some_name, ref none_name,
+        ref some_name_snake, ref none_name_snake, ref some_ty, ref some_ty_name, is_generic, ref bounds, ref imp,
+        ref func, ref c_func, ref opt
     } = *container;
 
     /////////////////////////////////////////////////////////////////////////
@@ -25,14 +21,14 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
 # Panics
 
 Panics if the value is a `{none}` with a custom panic message provided by `msg`.",
-            some = some_ident, none = none_ident,
+            some = some_name, none = none_name,
         );
         // can't be c_func right now because of `panic`'s formatting. std uses nightly-only functions from feature(core_panic)
         impl_block.extend(quote! {
             #[doc = #doc]
             #func expect(self, msg: &str) -> #some_ty {
                 match self {
-                    #some_x => x,
+                    #some(x) => x,
                     _ => panic!("{}", msg),
                 }
             }
@@ -44,7 +40,7 @@ Panics if the value is a `{none}` with a custom panic message provided by `msg`.
         let msg = format!(
             "called `{name}::unwrap()` on a `{none}` value",
             name = name,
-            none = none_ident
+            none = none_name
         );
         let doc = format!(
             "Returns the contained `{some}` value, consuming `self`. Equivalent to `Option::unwrap`.
@@ -52,14 +48,14 @@ Panics if the value is a `{none}` with a custom panic message provided by `msg`.
 # Panics
 
 Panics if the value is a `{none}`.",
-            some = some_ident, none = none_ident,
+            some = some_name, none = none_name,
         );
         // can't be c_func right now because of `panic`'s formatting. std uses nightly-only functions from feature(core_panic)
         impl_block.extend(quote! {
             #[doc = #doc]
             #func unwrap(self) -> #some_ty {
                 match self {
-                    #some_x => x,
+                    #some(x) => x,
                     _ => panic!("{}", #msg),
                 }
             }
@@ -70,14 +66,14 @@ Panics if the value is a `{none}`.",
     {
         let doc = format!(
             "Returns the contained `{some}` value or a provided default. Equivalent to `Option::unwrap_or`.",
-            some = some_ident,
+            some = some_name,
         );
         // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
         impl_block.extend(quote! {
             #[doc = #doc]
             #func unwrap_or(self, default: #some_ty) -> #some_ty {
                 match self {
-                    #some_x => x,
+                    #some(x) => x,
                     _ => default,
                 }
             }
@@ -88,7 +84,7 @@ Panics if the value is a `{none}`.",
     {
         let doc = format!(
             "Returns the contained `{some}` value or computes it from a closure. Equivalent to `Option::unwrap_or_else`.",
-            some = some_ident,
+            some = some_name,
         );
         // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
         impl_block.extend(quote! {
@@ -98,7 +94,7 @@ Panics if the value is a `{none}`.",
                 F: FnOnce() -> #some_ty,
             {
                 match self {
-                    #some_x => x,
+                    #some(x) => x,
                     _ => f(),
                 }
             }
@@ -109,7 +105,7 @@ Panics if the value is a `{none}`.",
     {
         let doc = format!(
             "Returns the contained `{some}` value or its default. Equivalent to `Option::unwrap_or_default`.",
-            some = some_ident,
+            some = some_name,
         );
         // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
         impl_block.extend(quote! {
@@ -119,7 +115,7 @@ Panics if the value is a `{none}`.",
                 #some_ty: ::std::default::Default,
             {
                 match self {
-                    #some_x => x,
+                    #some(x) => x,
                     _ => ::std::default::Default::default(),
                 }
             }
@@ -134,14 +130,14 @@ Panics if the value is a `{none}`.",
 # Safety
 
 The caller must guarantee that the value is a `{some}`. Otherwise, undefined behavior occurs.",
-            some = some_ident,
+            some = some_name,
         );
         // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
         impl_block.extend(quote! {
             #[doc = #doc]
             pub unsafe fn unwrap_unchecked(self) -> #some_ty {
                 match self {
-                    #some_x => x,
+                    #some(x) => x,
                     // SAFETY: the safety contract must be upheld by the caller.
                     _ => unsafe { ::std::hint::unreachable_unchecked() },
                 }

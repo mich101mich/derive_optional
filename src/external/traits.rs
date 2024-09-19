@@ -4,23 +4,19 @@ pub(crate) fn add_external(container: &DataContainer, additional_impls: &mut Tok
     #[allow(unused_variables)]
     #[rustfmt::skip]
     let DataContainer {
-        ref name, ref full_name, ref full_name_string,
-        ref some_ident, ref none_ident, ref some_snake, ref none_snake, ref none_pattern,
-        ref some_ty, ref some_field_ident, ref some_ty_name, is_generic,
-        ref imp, ref wheres, ref where_clause,
-        ref some_x, ref some_ref_x, ref some_ref_mut_x, ref some__, ref some_y, ref some_xy,
-        ref func, ref c_func, ref opt,
-        ..
+        ref name, ref full_name, ref full_name_string, ref some, ref none, ref some_name, ref none_name,
+        ref some_name_snake, ref none_name_snake, ref some_ty, ref some_ty_name, is_generic, ref bounds, ref imp,
+        ref func, ref c_func, ref opt
     } = *container;
 
     // Self: From<#some_ty>
     {
-        let doc = format!("Moves the value into a `{}`.", some_ident,);
+        let doc = format!("Moves the value into a `{}`.", some_name);
         additional_impls.extend(quote! {
-            #imp ::std::convert::From<#some_ty> for #full_name #wheres {
+            #imp ::std::convert::From<#some_ty> for #full_name {
                 #[doc = #doc]
                 fn from(x: #some_ty) -> Self {
-                    #some_x
+                    #some(x)
                 }
             }
         });
@@ -29,11 +25,11 @@ pub(crate) fn add_external(container: &DataContainer, additional_impls: &mut Tok
     // Self: From<Option>
     {
         additional_impls.extend(quote! {
-            #imp ::std::convert::From<#opt<#some_ty>> for #full_name #wheres {
+            #imp ::std::convert::From<#opt<#some_ty>> for #full_name {
                 fn from(src: #opt<#some_ty>) -> Self {
                     match src {
-                        #opt::Some(x) => #some_x,
-                        _ => #none_pattern,
+                        #opt::Some(x) => #some(x),
+                        _ => #none,
                     }
                 }
             }
@@ -43,10 +39,10 @@ pub(crate) fn add_external(container: &DataContainer, additional_impls: &mut Tok
     // Option: From<Self>
     {
         additional_impls.extend(quote! {
-            #imp ::std::convert::From<#full_name> for #opt<#some_ty> #wheres {
+            #imp ::std::convert::From<#full_name> for #opt<#some_ty> {
                 fn from(src: #full_name) -> Self {
                     match src {
-                        #some_x => #opt::Some(x),
+                        #some(x) => #opt::Some(x),
                         _ => #opt::None,
                     }
                 }
@@ -58,13 +54,13 @@ pub(crate) fn add_external(container: &DataContainer, additional_impls: &mut Tok
     {
         let doc = format!(
             "Returns a `{}` value. Equivalent to `Option::default`.",
-            none_ident,
+            none_name,
         );
         additional_impls.extend(quote! {
-            #imp ::std::default::Default for #full_name #wheres {
+            #imp ::std::default::Default for #full_name {
                 #[doc = #doc]
                 fn default() -> Self {
-                    #none_pattern
+                    #none
                 }
             }
         });
@@ -76,7 +72,7 @@ pub(crate) fn add_external(container: &DataContainer, additional_impls: &mut Tok
             "Returns an iterator over the possibly contained value. Equivalent to `Option::into_iter`.",
         );
         additional_impls.extend(quote! {
-            #imp ::std::iter::IntoIterator for #full_name #wheres {
+            #imp ::std::iter::IntoIterator for #full_name {
                 type Item = #some_ty;
                 type IntoIter = ::std::option::IntoIter<#some_ty>;
 
