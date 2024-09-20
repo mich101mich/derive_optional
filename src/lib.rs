@@ -412,14 +412,14 @@ fn check_generics(generics: syn::Generics, some_ty_name: &str) -> Result<Option<
 
     error.ok_or_build()?;
 
-    let Some(ty) = generic_type else {
-        return Ok(None);
-    };
+    if let Some(ty) = generic_type {
+        if ty.ident != *some_ty_name {
+            let msg = "The generic type must be the same as the type in the `Some` variant";
+            return Error::err_spanned(ty, msg);
+        }
 
-    if ty.ident != *some_ty_name {
-        let msg = "The generic type must be the same as the type in the `Some` variant";
-        return Error::err_spanned(ty, msg);
+        Ok(Some(out_bounds))
+    } else {
+        Ok(None)
     }
-
-    Ok(Some(out_bounds))
 }

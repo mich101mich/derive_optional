@@ -100,9 +100,10 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
         let doc = format!(
             "Returns a slice of the contained value, if any. Equivalent to `Option::as_slice`."
         );
+        // can't be c_func right now because from_ref is not yet const in our MSRV
         impl_block.extend(quote! {
             #[doc = #doc]
-            #c_func as_slice(&self) -> &[#some_ty] {
+            #func as_slice(&self) -> &[#some_ty] {
                 match *self {
                     #some(ref x) => ::std::slice::from_ref(x),
                     _ => &[],
@@ -116,6 +117,7 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
         let doc = format!(
             "Returns a mutable slice of the contained value, if any. Equivalent to `Option::as_mut_slice`."
         );
+        // can't be c_func right now because from_mut is not const yet
         impl_block.extend(quote! {
             #[doc = #doc]
             #func as_mut_slice(&mut self) -> &mut [#some_ty] {
