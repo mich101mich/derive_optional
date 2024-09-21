@@ -59,6 +59,7 @@ pub(crate) fn add_external(container: &DataContainer, additional_impls: &mut Tok
             "Returns a `{}` value. Equivalent to `Option::default`.",
             none_name,
         );
+        // note that this does not require `Default` for `#some_ty`, since the `none` variant is returned
         additional_impls.extend(quote! {
             #[automatically_derived]
             #imp ::std::default::Default for #full_name {
@@ -91,4 +92,35 @@ pub(crate) fn add_external(container: &DataContainer, additional_impls: &mut Tok
 
     // Self: std::ops::Try
     // unstable
+    #[cfg(feature = "try_op")]
+    {
+        additional_impls.extend(quote! {
+            #[automatically_derived]
+            #imp ::std::ops::Try for #full_name {
+                type Output = #some_ty;
+                type Residual = <#opt<#some_ty> as ::std::ops::Try>::Residual;
+
+                #[inline]
+                fn from_output(output: Self::Output) -> Self {
+                    #some(output)
+                }
+
+                #[inline]
+                fn branch(self) -> std::ops::ControlFlow<Self::Residual, Self::Output> {
+                    match self {
+                        #some(x) => std::ops::ControlFlow::Continue(x),
+                        #none => std::ops::ControlFlow::Break(#opt::None),
+                    }
+                }
+            }
+
+            #[automatically_derived]
+            #imp ::std::ops::FromResidual for #full_name {
+                #[inline]
+                fn from_residual(_residual: <Self as ::std::ops::Try>::Residual) -> Self {
+                    #none
+                }
+            }
+        });
+    }
 }

@@ -1,4 +1,21 @@
-mod generic {}
+#![cfg_attr(feature = "try_op", feature(try_trait_v2))]
+mod generic {
+    mod external {
+        mod impls;
+        mod traits;
+    }
+    mod sections {
+        mod s01_querying;
+        mod s02_ref_adapters;
+        mod s03_get_contained;
+        mod s04_transformers;
+        mod s05_bool_ops;
+        mod s05_iters;
+        mod s06_entry_ops;
+        mod s07_misc;
+        mod s99_additions;
+    }
+}
 
 mod specific {
     mod external {

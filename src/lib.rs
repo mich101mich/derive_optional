@@ -15,8 +15,56 @@
     rustdoc::invalid_codeblock_attributes,
     rustdoc::bare_urls
 )]
+#![cfg_attr(feature = "try_op", allow(unstable_features))]
+#![cfg_attr(feature = "try_op", feature(try_trait_v2))]
 
 //! TODO: doc
+//!
+//! ## Features
+//!
+//! ### `try_op`
+//! Enables the unstable `std::ops::Try` implementation. **Requires nightly**.  
+//! This feature is disabled by default.
+//!
+//! Note that this allows the `?` operator for your enum type and conversions to and from `Option`:
+//!
+//! ```rust
+//! # #![cfg_attr(feature = "try_op", feature(try_trait_v2))]
+//! # use derive_optional::Optional;
+//! #
+//! #[derive(Optional, PartialEq, Debug)]
+//! enum MyType {
+//!     SomeVariant(u8),
+//!     NoneVariant,
+//! }
+//!
+//! #[cfg(feature = "try_op")]
+//! {
+//!     fn returns_my_type() -> MyType {
+//!         assert_eq!(MyType::SomeVariant(42)?, 42);
+//!
+//!         MyType::NoneVariant?; // early return
+//!         unreachable!()
+//!     }
+//!     fn returns_option() -> Option<u8> {
+//!         assert_eq!(MyType::SomeVariant(42)?, 42);
+//!
+//!         MyType::NoneVariant?; // early return
+//!         unreachable!()
+//!     }
+//!     fn returns_my_type_from_option() -> MyType {
+//!         assert_eq!(Some(42)?, 42);
+//!
+//!         None?; // early return
+//!         unreachable!()
+//!     }
+//!
+//!     assert_eq!(returns_my_type(), MyType::NoneVariant);
+//!     assert_eq!(returns_option(), None);
+//!     assert_eq!(returns_my_type_from_option(), MyType::NoneVariant);
+//! }
+//! ```
+//!
 
 mod error;
 use error::*;
@@ -108,6 +156,7 @@ impl DataContainer {
 /// `derive(Optional)` can be done on types with or without generics:
 ///
 /// ```
+/// # #![cfg_attr(feature = "try_op", feature(try_trait_v2))]
 /// # use derive_optional::Optional;
 /// use std::fmt::Display;
 /// #[derive(Optional)]
@@ -134,6 +183,7 @@ impl DataContainer {
 /// The following would be rejected:
 ///
 /// ```compile_fail
+/// # #![cfg_attr(feature = "try_op", feature(try_trait_v2))]
 /// # use std::convert::TryFrom;
 /// # use derive_optional::Optional;
 /// #[derive(Optional)]
@@ -162,9 +212,9 @@ impl DataContainer {
 ///
 /// #### Querying the contained values
 /// - `is_<some>` (where `<some>` is the snake_case version of the `Some`-like variant)
-/// - `is_<some>_and`
+/// - `is_<some>_and` (see above)
 /// - `is_<none>` (same as above, but for the `None`-like variant)
-/// - ~~`is_<none>_or`~~ (U)
+/// - `is_<none>_or` (see above)
 ///
 /// #### Adapter for working with references
 /// - `as_ref` (G)
@@ -185,8 +235,8 @@ impl DataContainer {
 /// #### Transforming contained values
 /// - `map` (G)
 /// - `inspect`
-/// - `map_or` (G)
-/// - `map_or_else` (G)
+/// - `map_or`
+/// - `map_or_else`
 /// - `ok_or`
 /// - `ok_or_else`
 /// - `as_deref` (G)
@@ -216,24 +266,35 @@ impl DataContainer {
 /// - `replace`
 /// - `contains`
 /// - `zip` (G)
-/// - `zip_with`
+/// - `zip_with` [^1]
 /// - `unzip` (G)
+/// - `copied` (G)
+/// - `cloned` (G)
+/// - `transpose` (G)
+/// - `flatten` (G)
 ///
 /// ## Additional Methods not in `Option`
 /// - `as_option_ref`: Converts `&Self` to `Option<&inner>`, similar to `as_ref`
 ///   but swapping `Self` with `Option`
 /// - `as_option_mut`: Converts `&mut Self` to `Option<&mut inner>`, similar to `as_mut`
 ///   but swapping `Self` with `Option`
+/// - `transpose` has additional implementations for `Self<Option>` (G)
+///   - `Option<Self>::transpose` would need to be implemented on `Option`, requiring the use of
+///     an extension trait that the user would need to import.
 ///
 /// ## Traits
-/// - `From<T> for Self`
-/// - `From<Option<T>> for Self`
-/// - `From<Self> for Option<T>`
-/// - `Self: Default`
+/// - `From<inner type> for Self`
+/// - `From<Option<inner type>> for Self`
+/// - `From<Self> for Option<inner type>`
+/// - `Self: Default` (returns the `None` variant, does not require `Default` for the inner type)
 ///
 /// ## Things that were **not** added
 /// - unstable or nightly-only methods and traits
-///   - this sadly includes the try (`?`) operator
+///   - this sadly includes the try (`?`) operator, though it can be used on nightly with the [`try_op`](index.html#try_op) feature
+///
+/// [^1]: `zip_with` is in its original form only available for generic enums, but it is supported
+///       for non-generic types as well, with the restriction that the combined type must be the same
+///       as the contained type.
 #[proc_macro_derive(Optional)]
 pub fn optional(input: TokenStream1) -> TokenStream1 {
     let input = syn::parse_macro_input!(input as syn::DeriveInput);

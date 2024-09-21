@@ -35,7 +35,29 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     }
 
     // is_some_and
-    // TODO:
+    {
+        let is_some_and = Ident::new(
+            &format!("is_{}_and", some_name_snake),
+            some.clone().into_iter().last().unwrap().span(),
+        );
+        let doc = format!(
+            "Returns `true` if the `{name}` is a `{some}` value and the predicate `f` returns `true`.",
+            name = name,
+            some = some_name,
+        );
+        impl_block.extend(quote! {
+            #[doc = #doc]
+            #func #is_some_and<F>(self, f: F) -> bool
+            where
+                F: FnOnce(#some_ty) -> bool,
+            {
+                match self {
+                    #some(x) => f(x),
+                    _ => false,
+                }
+            }
+        });
+    }
 
     // is_none
     {
@@ -57,5 +79,27 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     }
 
     // is_none_or
-    // unstable
+    {
+        let is_none_or = Ident::new(
+            &format!("is_{}_or", none_name_snake),
+            none.clone().into_iter().last().unwrap().span(),
+        );
+        let doc = format!(
+            "Returns `true` if the `{name}` is a `{none}` value or the predicate `f` returns `true`.",
+            name = name,
+            none = none_name,
+        );
+        impl_block.extend(quote! {
+            #[doc = #doc]
+            #func #is_none_or<F>(self, f: F) -> bool
+            where
+                F: FnOnce(#some_ty) -> bool,
+            {
+                match self {
+                    #none => true,
+                    #some(x) => f(x),
+                }
+            }
+        });
+    }
 }

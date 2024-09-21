@@ -80,7 +80,7 @@ cd "${BASE_DIR}"
 try_silent rustup update
 try_silent cargo update
 try_silent cargo +stable test
-try_silent cargo +nightly test
+try_silent cargo +nightly test --all-features
 
 if [[ OVERWRITE -eq 1 ]]; then
     echo "Trybuild overwrite mode enabled"
@@ -122,7 +122,7 @@ cd "${MIN_VERSIONS_DIR}"
 try_silent cargo +nightly -Z minimal-versions update
 
 try_silent cargo +stable test
-try_silent cargo +nightly test
+try_silent cargo +nightly test --all-features
 
 ########
 echo "All tests passed!"

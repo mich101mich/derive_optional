@@ -122,4 +122,11 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
             });
         }
     }
+
+    // functions moved to external/impls.rs:
+    // unzip
+    // copied
+    // cloned
+    // transpose
+    // flatten
 }

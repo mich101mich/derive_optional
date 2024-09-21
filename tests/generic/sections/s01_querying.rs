@@ -1,8 +1,8 @@
 use derive_optional::Optional;
 
 #[derive(Optional, Debug, PartialEq, Eq, Clone, Copy)]
-enum TestType {
-    Something(usize),
+enum TestType<T: std::fmt::Debug + PartialEq> {
+    Something(T),
     Nothing,
 }
 use TestType::*;
@@ -13,7 +13,7 @@ fn is_some() {
     let test = Something(5);
     assert!(test.is_something());
 
-    let test = Nothing;
+    let test: TestType<usize> = Nothing;
     assert!(!test.is_something());
 }
 
@@ -26,7 +26,7 @@ fn is_some_and() {
     let test = Something(5);
     assert!(!test.is_something_and(|x| x == 6));
 
-    let test = Nothing;
+    let test: TestType<usize> = Nothing;
     assert!(!test.is_something_and(|x| x == 5));
 }
 
@@ -36,7 +36,7 @@ fn is_none() {
     let test = Something(5);
     assert!(!test.is_nothing());
 
-    let test = Nothing;
+    let test: TestType<usize> = Nothing;
     assert!(test.is_nothing());
 }
 
@@ -49,6 +49,6 @@ fn is_none_or() {
     let test = Something(5);
     assert!(!test.is_nothing_or(|x| x == 6));
 
-    let test = Nothing;
+    let test: TestType<usize> = Nothing;
     assert!(test.is_nothing_or(|x| x == 5));
 }

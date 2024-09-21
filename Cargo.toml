@@ -15,6 +15,10 @@ exclude = ["/.vscode/*", "/.gitignore", "/.github/*"]
 [lib]
 proc-macro = true
 
+[features]
+default = []
+try_op = [] # Adds the try operator implementation. Requires nightly
+
 [dependencies]
 syn = { version = "2.0.1", features = ["parsing", "derive", "full"] }
 quote = "1.0.0"
