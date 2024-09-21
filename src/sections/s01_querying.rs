@@ -28,7 +28,7 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
         // some_match might have {} or (), so match against none instead
         impl_block.extend(quote! {
             #[doc = #doc]
-            #c_func #is_some(&self) -> bool {
+            #func #is_some(&self) -> bool {
                 matches!(*self, #some(_))
             }
         });
@@ -50,7 +50,7 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
         );
         impl_block.extend(quote! {
             #[doc = #doc]
-            #c_func #is_none(&self) -> bool {
+            #func #is_none(&self) -> bool {
                 matches!(*self, #none)
             }
         });

@@ -18,7 +18,7 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
         );
         impl_block.extend(quote! {
             #[doc = #doc]
-            #c_func as_option_ref(&self) -> #opt<&#some_ty> {
+            #func as_option_ref(&self) -> #opt<&#some_ty> {
                 match *self {
                     #some(ref x) => #opt::Some(x),
                     _ => #opt::None,
