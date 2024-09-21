@@ -67,9 +67,11 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
             "zips `self` with another `{name}` and returns the pair of contained values if both are `{some}`s. Equivalent to `Option::zip`.",
             name = name, some = some_name,
         );
+        let where_clause = container.where_clause_for(quote! {U});
+        let tuple_bounds = container.bounds_for(quote! {(#some_ty, U)});
         impl_block.extend(quote! {
             #[doc = #doc]
-            #func zip<U>(self, other: #name<U>) -> #name<(#some_ty, U)> {
+            #func zip<U>(self, other: #name<U>) -> #name<(#some_ty, U)> #where_clause #tuple_bounds {
                 match (self, other) {
                     (#some(x), #some(y)) => #some((x, y)),
                     _ => #none,
@@ -85,11 +87,15 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
                 "zips `self` with another `{name}` and returns the result of the provided function if both are `{some}`s. Equivalent to `Option::zip_with`.",
                 name = name, some = some_name,
             );
+            let u_bounds = container.bounds_for(quote! {U});
+            let r_bounds = container.bounds_for(quote! {R});
             impl_block.extend(quote! {
                 #[doc = #doc]
                 #func zip_with<U, F, R>(self, other: #name<U>, f: F) -> #name<R>
                 where
                     F: FnOnce(#some_ty, U) -> R,
+                    #u_bounds
+                    #r_bounds
                 {
                     match (self, other) {
                         (#some(x), #some(y)) => #some(f(x, y)),

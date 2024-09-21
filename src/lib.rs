@@ -80,7 +80,7 @@ pub(crate) struct DataContainer {
     /// Whether the enum is generic
     is_generic: bool,
     /// The traits on the generic type. Empty if not generic
-    bounds: Bounds,
+    bounds: Option<Bounds>,
     /// impl #ty_generics
     imp: TokenStream,
 
@@ -92,6 +92,15 @@ pub(crate) struct DataContainer {
     opt: TokenStream,
 }
 
+impl DataContainer {
+    fn where_clause_for(&self, ty: impl ToTokens) -> Option<TokenStream> {
+        self.bounds_for(ty).map(|b| quote! { where #b })
+    }
+    fn bounds_for(&self, ty: impl ToTokens) -> Option<TokenStream> {
+        self.bounds.as_ref().map(|b| quote! { #ty: #b, })
+    }
+}
+
 /// TODO: doc
 /// TODO: talk about `T` as placeholder for the contained type
 ///
@@ -99,8 +108,7 @@ pub(crate) struct DataContainer {
 ///
 /// `derive(Optional)` can be done on types with or without generics:
 ///
-/// ```ignore
-/// TODO: fix ignore
+/// ```
 /// # use derive_optional::Optional;
 /// use std::fmt::Display;
 /// #[derive(Optional)]
@@ -303,16 +311,17 @@ fn optional_internal(input: syn::DeriveInput) -> Result<TokenStream> {
     let (is_generic, bounds, imp, full_name);
     if let Some(in_bounds) = check_generics(input.generics, &some_ty_name)? {
         is_generic = true;
-        bounds = in_bounds;
-        if bounds.is_empty() {
-            imp = quote! {impl<#some_ty>}
+        if !in_bounds.is_empty() {
+            imp = quote! {impl<#some_ty: #in_bounds>};
+            bounds = Some(in_bounds);
         } else {
-            imp = quote! {impl<#some_ty: #bounds>}
+            imp = quote! {impl<#some_ty>};
+            bounds = None;
         };
         full_name = quote! {#name<#some_ty>};
     } else {
         is_generic = false;
-        bounds = Bounds::new();
+        bounds = None;
         imp = quote! {impl};
         full_name = quote! {#name};
     }
@@ -361,28 +370,36 @@ fn optional_internal(input: syn::DeriveInput) -> Result<TokenStream> {
 
     let DataContainer { full_name, imp, .. } = container;
 
-    Ok(quote! {
+    let tokens = quote! {
         #imp #full_name {
             #impl_block
         }
 
         #additional_impls
-    })
+    };
+
+    // println!("//////////////////////////////////////////////////");
+    // println!("//////////////////////////////////////////////////");
+    // println!("{}", tokens);
+    // println!("//////////////////////////////////////////////////");
+    // println!("//////////////////////////////////////////////////");
+
+    Ok(tokens)
 }
 
 fn check_generics(generics: syn::Generics, some_ty_name: &str) -> Result<Option<Bounds>> {
     let mut generic_type = None;
     let mut out_bounds = Bounds::new();
     let mut error = Error::builder();
-    for ty in generics.params.iter() {
+    for ty in generics.params.into_iter() {
         match ty {
             syn::GenericParam::Type(ty) => {
                 if generic_type.is_some() {
                     let msg = "Optional currently only supports one generic type";
                     error.with_spanned(ty, msg);
                 } else {
-                    generic_type = Some(ty);
-                    out_bounds.extend(ty.bounds.clone());
+                    generic_type = Some(ty.ident);
+                    out_bounds.extend(ty.bounds);
                 }
             }
             _ => {
@@ -413,7 +430,7 @@ fn check_generics(generics: syn::Generics, some_ty_name: &str) -> Result<Option<
     error.ok_or_build()?;
 
     if let Some(ty) = generic_type {
-        if ty.ident != *some_ty_name {
+        if ty != *some_ty_name {
             let msg = "The generic type must be the same as the type in the `Some` variant";
             return Error::err_spanned(ty, msg);
         }

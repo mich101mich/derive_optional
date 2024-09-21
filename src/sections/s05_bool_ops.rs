@@ -20,9 +20,10 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
             name = name, none = none_name,
         );
         if is_generic {
+            let where_clause = container.where_clause_for(quote! {U});
             impl_block.extend(quote! {
                 #[doc = #doc]
-                #func and<U>(self, optb: #name<U>) -> #name<U> {
+                #func and<U>(self, optb: #name<U>) -> #name<U> #where_clause {
                     match self {
                         #some(_) => optb,
                         _ => #none,
@@ -48,12 +49,14 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
             "Returns `{name}` if the `{none}` is a `{name}`, otherwise calls `f` and returns the result. Equivalent to `Option::and_then`.",
             name = name, none = none_name,
         );
+        let u_bounds = container.bounds_for(quote! {U});
         if is_generic {
             impl_block.extend(quote! {
                 #[doc = #doc]
                 #func and_then<U, F>(self, f: F) -> #name<U>
                 where
                     F: FnOnce(#some_ty) -> #name<U>,
+                    #u_bounds
                 {
                     match self {
                         #some(x) => f(x),

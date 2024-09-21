@@ -19,12 +19,14 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
             "Maps an `{name}<{ty}>` to `{name}<U>` by applying a function to a contained value. Equivalent to `Option::map`.",
             name = name, ty = some_ty_name,
         );
+        let u_bounds = container.bounds_for(quote! {U});
         // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
         impl_block.extend(quote! {
             #[doc = #doc]
             #func map<U, F>(self, f: F) -> #name<U>
             where
                 F: FnOnce(#some_ty) -> U,
+                #u_bounds
             {
                 match self {
                     #some(x) => #some(f(x)),
@@ -35,10 +37,27 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     }
 
     // inspect
-    // unstable
+    {
+        let doc = format!(
+            "Applies a function to the contained value (if any). Equivalent to `Option::inspect`.",
+        );
+        // can't be c_func right now because of destructors (https://github.com/rust-lang/rust/issues/67792)
+        impl_block.extend(quote! {
+            #[doc = #doc]
+            #func inspect<F>(self, f: F) -> Self
+            where
+                F: FnOnce(&#some_ty),
+            {
+                if let #some(ref x) = self {
+                    f(x);
+                }
+                self
+            }
+        });
+    }
 
     // map_or
-    if is_generic {
+    {
         let doc = format!(
             "Applies a function to the contained value (if any), or returns the provided default (if not). Equivalent to `Option::map_or`.",
         );
@@ -58,7 +77,7 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     }
 
     // map_or_else
-    if is_generic {
+    {
         let doc = format!(
             "Applies a function to the contained value (if any), or calls the provided function to compute a default (if not). Equivalent to `Option::map_or_else`.",
         );
@@ -123,15 +142,18 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
             "Creates a `{name}<&{ty}::Target>` from an `&{name}<{ty}>`. Equivalent to `Option::as_deref`.",
             name = name, ty = some_ty_name,
         );
+        let ret_inner = quote! {&'__opt_lifetime <#some_ty as ::std::ops::Deref>::Target};
+        let target_bounds = container.bounds_for(&ret_inner);
         // can't be c_func right now because of trait bounds (https://github.com/rust-lang/rust/issues/67792)
         impl_block.extend(quote! {
             #[doc = #doc]
-            #func as_deref(&self) -> #name<&<#some_ty as ::std::ops::Deref>::Target>
+            #func as_deref<'__opt_lifetime>(&'__opt_lifetime self) -> #name<#ret_inner>
             where
                 #some_ty: ::std::ops::Deref,
+                #target_bounds
             {
-                match self.as_ref() {
-                    #some(x) => #some(x.deref()),
+                match self {
+                    #some(ref x) => #some(x.deref()),
                     _ => #none,
                 }
             }
@@ -144,16 +166,19 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
             "Creates a `{name}<&mut {ty}::Target>` from an `&mut {name}<{ty}>`. Equivalent to `Option::as_deref_mut`.",
             name = name, ty = some_ty_name,
         );
+        let ret_inner = quote! {&'__opt_lifetime mut <#some_ty as ::std::ops::Deref>::Target};
+        let target_bounds = container.bounds_for(&ret_inner);
         // can't be c_func right now because of trait bounds (https://github.com/rust-lang/rust/issues/67792)
         // and &mut (https://github.com/rust-lang/rust/issues/57349)
         impl_block.extend(quote! {
             #[doc = #doc]
-            #func as_deref_mut(&mut self) -> #name<&mut <#some_ty as ::std::ops::Deref>::Target>
+            #func as_deref_mut<'__opt_lifetime>(&'__opt_lifetime mut self) -> #name<#ret_inner>
             where
                 #some_ty: ::std::ops::DerefMut,
+                #target_bounds
             {
-                match self.as_mut() {
-                    #some(x) => #some(x.deref_mut()),
+                match self {
+                    #some(ref mut x) => #some(x.deref_mut()),
                     _ => #none,
                 }
             }

@@ -20,9 +20,10 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
             name = name,
             ty = some_ty_name,
         );
+        let where_clause = container.where_clause_for(quote! {&'__opt_lifetime #some_ty});
         impl_block.extend(quote! {
             #[doc = #doc]
-            #c_func as_ref(&self) -> #name<&#some_ty> {
+            #c_func as_ref<'__opt_lifetime>(&'__opt_lifetime self) -> #name<&'__opt_lifetime #some_ty> #where_clause {
                 match *self {
                     #some(ref x) => #some(x),
                     _ => #none,
@@ -38,10 +39,11 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
             name = name,
             ty = some_ty_name,
         );
+        let where_clause = container.where_clause_for(quote! {&'__opt_lifetime mut #some_ty});
         // can't be c_func right now because of &mut: see https://github.com/rust-lang/rust/issues/57349
         impl_block.extend(quote! {
             #[doc = #doc]
-            #func as_mut(&mut self) -> #name<&mut #some_ty> {
+            #func as_mut<'__opt_lifetime>(&'__opt_lifetime mut self) -> #name<&'__opt_lifetime mut #some_ty> #where_clause {
                 match *self {
                     #some(ref mut x) => #some(x),
                     _ => #none,
@@ -57,14 +59,16 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
             name = name,
             ty = some_ty_name,
         );
+        let ret_inner = quote! {::std::pin::Pin<&'__opt_lifetime #some_ty>};
+        let where_clause = container.where_clause_for(&ret_inner);
         // can't be c_func right now because of Pin::<&'a T>::get_ref (https://github.com/rust-lang/rust/issues/76654)
         impl_block.extend(quote! {
             #[doc = #doc]
-            #func as_pin_ref(self: ::std::pin::Pin<&Self>) -> #name<::std::pin::Pin<&#some_ty>> {
-                match ::std::pin::Pin::get_ref(self).as_ref() {
+            #func as_pin_ref<'__opt_lifetime>(self: ::std::pin::Pin<&'__opt_lifetime Self>) -> #name<#ret_inner> #where_clause {
+                match ::std::pin::Pin::get_ref(self) {
                     // SAFETY: `x` is guaranteed to be pinned because it comes from `self`
                     // which is pinned.
-                    #some(x) => unsafe { #some(::std::pin::Pin::new_unchecked(x)) },
+                    #some(ref x) => unsafe { #some(::std::pin::Pin::new_unchecked(x)) },
                     _ => #none,
                 }
             }
@@ -78,16 +82,18 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
             name = name,
             ty = some_ty_name,
         );
+        let ret_inner = quote! {::std::pin::Pin<&'__opt_lifetime mut #some_ty>};
+        let where_clause = container.where_clause_for(&ret_inner);
         // can't be c_func right now because of Pin::<&'a mut T>::get_unchecked_mut (https://github.com/rust-lang/rust/issues/76654)
         // and &mut (https://github.com/rust-lang/rust/issues/57349)
         impl_block.extend(quote! {
             #[doc = #doc]
-            #func as_pin_mut(self: ::std::pin::Pin<&mut Self>) -> #name<::std::pin::Pin<&mut #some_ty>> {
+            #func as_pin_mut<'__opt_lifetime>(self: ::std::pin::Pin<&'__opt_lifetime mut Self>) -> #name<#ret_inner> #where_clause {
                 // SAFETY: `get_unchecked_mut` is never used to move the `Option` inside `self`.
                 // `x` is guaranteed to be pinned because it comes from `self` which is pinned.
                 unsafe {
-                    match ::std::pin::Pin::get_unchecked_mut(self).as_mut() {
-                        #some(x) => #some(::std::pin::Pin::new_unchecked(x)),
+                    match ::std::pin::Pin::get_unchecked_mut(self) {
+                        #some(ref mut x) => #some(::std::pin::Pin::new_unchecked(x)),
                         _ => #none,
                     }
                 }
