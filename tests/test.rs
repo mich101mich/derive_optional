@@ -1,7 +1,10 @@
 mod generic {}
 
 mod specific {
-    mod external {}
+    mod external {
+        mod impls;
+        mod traits;
+    }
     mod sections {
         mod s01_querying;
         mod s02_ref_adapters;

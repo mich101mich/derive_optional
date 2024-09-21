@@ -142,12 +142,12 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
             "Creates a `{name}<&{ty}::Target>` from an `&{name}<{ty}>`. Equivalent to `Option::as_deref`.",
             name = name, ty = some_ty_name,
         );
-        let ret_inner = quote! {&'__opt_lifetime <#some_ty as ::std::ops::Deref>::Target};
+        let ret_inner = quote! {&'a <#some_ty as ::std::ops::Deref>::Target};
         let target_bounds = container.bounds_for(&ret_inner);
         // can't be c_func right now because of trait bounds (https://github.com/rust-lang/rust/issues/67792)
         impl_block.extend(quote! {
             #[doc = #doc]
-            #func as_deref<'__opt_lifetime>(&'__opt_lifetime self) -> #name<#ret_inner>
+            #func as_deref<'a>(&'a self) -> #name<#ret_inner>
             where
                 #some_ty: ::std::ops::Deref,
                 #target_bounds
@@ -166,13 +166,13 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
             "Creates a `{name}<&mut {ty}::Target>` from an `&mut {name}<{ty}>`. Equivalent to `Option::as_deref_mut`.",
             name = name, ty = some_ty_name,
         );
-        let ret_inner = quote! {&'__opt_lifetime mut <#some_ty as ::std::ops::Deref>::Target};
+        let ret_inner = quote! {&'a mut <#some_ty as ::std::ops::Deref>::Target};
         let target_bounds = container.bounds_for(&ret_inner);
         // can't be c_func right now because of trait bounds (https://github.com/rust-lang/rust/issues/67792)
         // and &mut (https://github.com/rust-lang/rust/issues/57349)
         impl_block.extend(quote! {
             #[doc = #doc]
-            #func as_deref_mut<'__opt_lifetime>(&'__opt_lifetime mut self) -> #name<#ret_inner>
+            #func as_deref_mut<'a>(&'a mut self) -> #name<#ret_inner>
             where
                 #some_ty: ::std::ops::DerefMut,
                 #target_bounds

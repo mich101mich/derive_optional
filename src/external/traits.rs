@@ -13,6 +13,7 @@ pub(crate) fn add_external(container: &DataContainer, additional_impls: &mut Tok
     {
         let doc = format!("Moves the value into a `{}`.", some_name);
         additional_impls.extend(quote! {
+            #[automatically_derived]
             #imp ::std::convert::From<#some_ty> for #full_name {
                 #[doc = #doc]
                 fn from(x: #some_ty) -> Self {
@@ -25,6 +26,7 @@ pub(crate) fn add_external(container: &DataContainer, additional_impls: &mut Tok
     // Self: From<Option>
     {
         additional_impls.extend(quote! {
+            #[automatically_derived]
             #imp ::std::convert::From<#opt<#some_ty>> for #full_name {
                 fn from(src: #opt<#some_ty>) -> Self {
                     match src {
@@ -39,6 +41,7 @@ pub(crate) fn add_external(container: &DataContainer, additional_impls: &mut Tok
     // Option: From<Self>
     {
         additional_impls.extend(quote! {
+            #[automatically_derived]
             #imp ::std::convert::From<#full_name> for #opt<#some_ty> {
                 fn from(src: #full_name) -> Self {
                     match src {
@@ -57,6 +60,7 @@ pub(crate) fn add_external(container: &DataContainer, additional_impls: &mut Tok
             none_name,
         );
         additional_impls.extend(quote! {
+            #[automatically_derived]
             #imp ::std::default::Default for #full_name {
                 #[doc = #doc]
                 fn default() -> Self {
@@ -72,6 +76,7 @@ pub(crate) fn add_external(container: &DataContainer, additional_impls: &mut Tok
             "Returns an iterator over the possibly contained value. Equivalent to `Option::into_iter`.",
         );
         additional_impls.extend(quote! {
+            #[automatically_derived]
             #imp ::std::iter::IntoIterator for #full_name {
                 type Item = #some_ty;
                 type IntoIter = ::std::option::IntoIter<#some_ty>;

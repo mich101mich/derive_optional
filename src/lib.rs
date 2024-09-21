@@ -25,7 +25,6 @@ use convert_case::{Case, Casing};
 use proc_macro::TokenStream as TokenStream1;
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
-use syn::Ident;
 
 mod sections {
     use super::DataContainer;
@@ -56,7 +55,7 @@ type Bounds = syn::punctuated::Punctuated<syn::TypeParamBound, syn::token::Plus>
 
 pub(crate) struct DataContainer {
     /// The name of the enum
-    name: Ident,
+    name: syn::Ident,
     /// The full name of the enum, including generics if present
     full_name: TokenStream,
     /// String representation of full_name
