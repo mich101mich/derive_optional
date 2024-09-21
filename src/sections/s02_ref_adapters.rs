@@ -21,9 +21,10 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
             ty = some_ty_name,
         );
         let where_clause = container.where_clause_for(quote! {&'a #some_ty});
+        // can't be c_func right now because of trait bounds in const functions aren't available in our MSRV
         impl_block.extend(quote! {
             #[doc = #doc]
-            #c_func as_ref<'a>(&'a self) -> #name<&'a #some_ty> #where_clause {
+            #func as_ref<'a>(&'a self) -> #name<&'a #some_ty> #where_clause {
                 match *self {
                     #some(ref x) => #some(x),
                     _ => #none,
