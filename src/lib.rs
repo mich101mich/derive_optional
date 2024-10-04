@@ -66,8 +66,8 @@
 //! ```
 //!
 
-mod error;
-use error::*;
+mod utils;
+use utils::*;
 
 use convert_case::{Case, Casing};
 use proc_macro::TokenStream as TokenStream1;
@@ -211,9 +211,9 @@ impl DataContainer {
 /// - (U): not yet added because it's unstable
 ///
 /// #### Querying the contained values
-/// - `is_<some>` (where `<some>` is the snake_case version of the `Some`-like variant)
+/// - `is_<some>` (where `<some>` is the snake_case version of the `'some'`-like variant)
 /// - `is_<some>_and` (see above)
-/// - `is_<none>` (same as above, but for the `None`-like variant)
+/// - `is_<none>` (same as above, but for the `none`-like variant)
 /// - `is_<none>_or` (see above)
 ///
 /// #### Adapter for working with references
@@ -286,15 +286,15 @@ impl DataContainer {
 /// - `From<inner type> for Self`
 /// - `From<Option<inner type>> for Self`
 /// - `From<Self> for Option<inner type>`
-/// - `Self: Default` (returns the `None` variant, does not require `Default` for the inner type)
+/// - `Self: Default` (returns the `none` variant, does not require `Default` for the inner type)
 ///
 /// ## Things that were **not** added
 /// - unstable or nightly-only methods and traits
 ///   - this sadly includes the try (`?`) operator, though it can be used on nightly with the [`try_op`](index.html#try_op) feature
 ///
-/// [^1]: `zip_with` is in its original form only available for generic enums, but it is supported
-///       for non-generic types as well, with the restriction that the combined type must be the same
-///       as the contained type.
+/// [^1]: `zip_with` is in its original form only available for generic enums. For non-generic types there is a slightly
+///       modified version where the zipping function is required to return the contained type of the enum, rather than
+///       an arbitrary generic type.
 #[proc_macro_derive(Optional)]
 pub fn optional(input: TokenStream1) -> TokenStream1 {
     let input = syn::parse_macro_input!(input as syn::DeriveInput);
@@ -314,38 +314,7 @@ fn optional_internal(input: syn::DeriveInput) -> Result<TokenStream> {
     }
     .map_err(|span| Error::new(span, "Optional can only be used on enums"))?;
 
-    let variants = data.variants;
-    if variants.len() != 2 {
-        let msg = "Optional only works when there are exactly 2 enum variants";
-        return Error::err_spanned(variants, msg);
-    }
-
-    let (some_variant, none_variant) = {
-        let mut iter = variants.into_iter();
-        let a = iter.next().unwrap(); // unwrap ok because we checked len == 2
-        let b = iter.next().unwrap();
-
-        let a_data = !matches!(a.fields, syn::Fields::Unit);
-        let b_data = !matches!(b.fields, syn::Fields::Unit);
-        match (a_data, b_data) {
-            (false, false) => {
-                let msg = "Optional needs exactly one variant with data (the `Some(T)` equivalent)";
-                return Error::builder()
-                    .with_spanned(a, msg)
-                    .with_spanned(b, msg)
-                    .build_err();
-            }
-            (true, true) => {
-                let msg = "Optional needs exactly one unit variant (the `None` equivalent)";
-                return Error::builder()
-                    .with_spanned(a, msg)
-                    .with_spanned(b, msg)
-                    .build_err();
-            }
-            (true, false) => (a, b),
-            (false, true) => (b, a),
-        }
-    };
+    let (some_variant, none_variant, some_field) = parse_variants(data.variants, &name)?;
 
     let some_ident = some_variant.ident;
     let none_ident = none_variant.ident;
@@ -356,15 +325,6 @@ fn optional_internal(input: syn::DeriveInput) -> Result<TokenStream> {
     let some_name_snake = some_name.to_case(Case::Snake);
     let none_name_snake = none_name.to_case(Case::Snake);
 
-    if some_variant.fields.len() != 1 {
-        let msg = "Optional currently only supports one type in the variant";
-        return Error::err_spanned(some_variant.fields, msg);
-    }
-    let some_field = some_variant.fields.into_iter().next().unwrap();
-    if let Some(ident) = some_field.ident.as_ref() {
-        let msg = "Optional currently only supports tuple variants for the `Some` variant";
-        return Error::err_spanned(ident, msg);
-    }
     let some_ty = some_field.ty;
     let some_ty_name = some_ty.to_token_stream().to_string();
 
@@ -447,6 +407,110 @@ fn optional_internal(input: syn::DeriveInput) -> Result<TokenStream> {
     Ok(tokens)
 }
 
+fn parse_variants(
+    variants: syn::punctuated::Punctuated<syn::Variant, syn::token::Comma>,
+    enum_name: &syn::Ident,
+) -> Result<(syn::Variant, syn::Variant, syn::Field)> {
+    // find the two variants
+    let mut iter = variants.into_iter();
+    let (mut a, mut b) = if let Some((a, b)) = iter.next().zip(iter.next()) {
+        // can't use let-else yet due to msrv
+        (a, b)
+    } else {
+        let msg = "Optional needs exactly two variants";
+        return Error::err_spanned(enum_name, msg);
+    };
+    if let Some(after) = iter.next() {
+        // check for more variants
+        let msg = "Optional only works when there are exactly 2 enum variants";
+        return Error::builder()
+            .with_spanned(after, msg)
+            .with_spans(iter, msg) // add all other variants
+            .build_err();
+    }
+
+    // figure out which one is the 'some' variant and which one is the 'none' variant
+    use syn::Fields::*;
+    let (fields, should_swap) = match (&a.fields, &b.fields) {
+        // the correct cases
+        (Unnamed(fields), Unit) => (fields.clone(), false),
+        (Unit, Unnamed(fields)) => (fields.clone(), true),
+
+        // the slightly wrong cases
+        (Named(f), Unit) | (Unit, Named(f)) => {
+            let wrong_ident = &if matches!(b.fields, Unit) { &a } else { &b }.ident;
+            let hint = match f.named.len() {
+                0 => format!("`{}(...)`", wrong_ident),
+                1 => format!(
+                    "`{}({})`",
+                    wrong_ident,
+                    f.named.first().unwrap().ty.to_token_stream()
+                ),
+                _ => format!(
+                    "`{0}({1}{0})`
+      with `struct {1}{0} {{ {2} }}`", // if this ever becomes a code suggestion, remember to add the generics from the enum
+                    wrong_ident,
+                    enum_name,
+                    f.named.to_token_stream().to_string().replace(" : ", ": ")
+                ),
+            };
+            let msg = format!(
+                "Optional currently does not support named fields in the 'some' variant, only tuple variants.
+Hint: Change this variant to for example {}",
+                hint
+            );
+            return Error::err_spanned(f, msg);
+        }
+        (Unnamed(_), Unnamed(_)) => {
+            let msg = "Optional requires exactly one of its variants (the 'none' variant) to have no fields";
+            return Error::err_from_spans([a, b], msg);
+        }
+        (Unit, Unit) => {
+            let msg = "Optional requires exactly one of its variants (the 'some' variant) to contain data";
+            return Error::err_from_spans([a, b], msg);
+        }
+
+        // everything else
+        _ => {
+            let msg = "Optional needs one unit variant (the 'none' variant) and one variant with data (the 'some' variant)";
+            return Error::err_from_spans([a, b], msg);
+        }
+    };
+    if should_swap {
+        std::mem::swap(&mut a, &mut b);
+    }
+
+    // find the field in the 'some' variant
+    let mut fields = fields.unnamed.into_iter();
+    let field = if let Some(field) = fields.next() {
+        // can't use let-else yet due to msrv
+        field
+    } else {
+        let msg = "Optional needs exactly one field in the 'some' variant";
+        return Error::err_spanned(a, msg);
+    };
+    if let Some(after) = fields.next() {
+        let msg = "Optional only works when there is exactly one field in the 'some' variant";
+        return Error::builder()
+            .with_spanned(after, msg)
+            .with_spans(fields, msg) // add all other fields
+            .build_err();
+    }
+
+    // check that the field is in the correct format
+    if let Some(ident) = field.ident.as_ref() {
+        // note that this is technically an error in syn, since we only take syn::Fields::Unnamed
+        let msg = format!(
+            "Optional currently only supports tuple variants for the 'some' variant like `{}({})`",
+            ident,
+            field.ty.to_token_stream()
+        );
+        return Error::err_spanned(ident, msg);
+    }
+
+    Ok((a, b, field))
+}
+
 fn check_generics(generics: syn::Generics, some_ty_name: &str) -> Result<Option<Bounds>> {
     let mut generic_type = None;
     let mut out_bounds = Bounds::new();
@@ -491,7 +555,7 @@ fn check_generics(generics: syn::Generics, some_ty_name: &str) -> Result<Option<
 
     if let Some(ty) = generic_type {
         if ty != *some_ty_name {
-            let msg = "The generic type must be the same as the type in the `Some` variant";
+            let msg = "The generic type must be the same as the type in the 'some' variant";
             return Error::err_spanned(ty, msg);
         }
 

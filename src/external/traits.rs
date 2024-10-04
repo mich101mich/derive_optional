@@ -84,7 +84,7 @@ pub(crate) fn add_external(container: &DataContainer, additional_impls: &mut Tok
 
                 #[doc = #doc]
                 fn into_iter(self) -> Self::IntoIter {
-                    #opt::from(self).into_iter()
+                    #opt::<#some_ty>::from(self).into_iter()
                 }
             }
         });

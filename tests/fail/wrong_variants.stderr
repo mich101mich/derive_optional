@@ -1,0 +1,115 @@
+error: Optional needs exactly two variants
+ --> tests/fail/wrong_variants.rs:2:6
+  |
+2 | enum NoVariants {}
+  |      ^^^^^^^^^^
+
+error: Optional needs exactly two variants
+ --> tests/fail/wrong_variants.rs:5:6
+  |
+5 | enum OneVariant {
+  |      ^^^^^^^^^^
+
+error: Optional needs exactly two variants
+  --> tests/fail/wrong_variants.rs:10:6
+   |
+10 | enum OneVariantWithData<T> {
+   |      ^^^^^^^^^^^^^^^^^^
+
+error: Optional only works when there are exactly 2 enum variants
+  --> tests/fail/wrong_variants.rs:18:5
+   |
+18 |     Variant3(usize),
+   |     ^^^^^^^^^^^^^^^
+
+error: Optional only works when there are exactly 2 enum variants
+  --> tests/fail/wrong_variants.rs:19:5
+   |
+19 |     Variant4 { field: usize },
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: Optional only works when there are exactly 2 enum variants
+  --> tests/fail/wrong_variants.rs:20:5
+   |
+20 |     Variant5,
+   |     ^^^^^^^^
+
+error: Optional requires exactly one of its variants (the 'some' variant) to contain data
+  --> tests/fail/wrong_variants.rs:25:5
+   |
+25 |     Variant1,
+   |     ^^^^^^^^
+
+error: Optional requires exactly one of its variants (the 'some' variant) to contain data
+  --> tests/fail/wrong_variants.rs:26:5
+   |
+26 |     Variant2,
+   |     ^^^^^^^^
+
+error: Optional requires exactly one of its variants (the 'none' variant) to have no fields
+  --> tests/fail/wrong_variants.rs:31:5
+   |
+31 |     Variant1(T),
+   |     ^^^^^^^^^^^
+
+error: Optional requires exactly one of its variants (the 'none' variant) to have no fields
+  --> tests/fail/wrong_variants.rs:32:5
+   |
+32 |     Variant2(T),
+   |     ^^^^^^^^^^^
+
+error: Optional needs one unit variant (the 'none' variant) and one variant with data (the 'some' variant)
+  --> tests/fail/wrong_variants.rs:37:5
+   |
+37 |     Variant1 { field: usize },
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: Optional needs one unit variant (the 'none' variant) and one variant with data (the 'some' variant)
+  --> tests/fail/wrong_variants.rs:38:5
+   |
+38 |     Variant2 { field: usize },
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: Optional currently does not support named fields in the 'some' variant, only tuple variants.
+       Hint: Change this variant to for example `Variant1(T)`
+  --> tests/fail/wrong_variants.rs:43:14
+   |
+43 |     Variant1 { field: T },
+   |              ^^^^^^^^^^^^
+
+error: Optional currently does not support named fields in the 'some' variant, only tuple variants.
+       Hint: Change this variant to for example `Variant2(T)`
+  --> tests/fail/wrong_variants.rs:49:14
+   |
+49 |     Variant2 { field: T },
+   |              ^^^^^^^^^^^^
+
+error: Optional currently does not support named fields in the 'some' variant, only tuple variants.
+       Hint: Change this variant to for example `Variant1(...)`
+  --> tests/fail/wrong_variants.rs:54:14
+   |
+54 |     Variant1 {},
+   |              ^^
+
+error: Optional currently does not support named fields in the 'some' variant, only tuple variants.
+       Hint: Change this variant to for example `Variant2(...)`
+  --> tests/fail/wrong_variants.rs:60:14
+   |
+60 |     Variant2 {},
+   |              ^^
+
+error: Optional currently does not support named fields in the 'some' variant, only tuple variants.
+       Hint: Change this variant to for example `Variant1(NamedDataVariantMultiFieldsVariant1)`
+             with `struct NamedDataVariantMultiFieldsVariant1 { a: T, b: usize, c: T }`
+  --> tests/fail/wrong_variants.rs:65:14
+   |
+65 |     Variant1 { a: T, b: usize, c: T },
+   |              ^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: Optional currently does not support named fields in the 'some' variant, only tuple variants.
+       Hint: Change this variant to for example `Variant2(NamedDataVariantMultiFields2Variant2)`
+             with `struct NamedDataVariantMultiFields2Variant2 { a: T, b: usize, c: T }`
+  --> tests/fail/wrong_variants.rs:71:14
+   |
+71 |     Variant2 { a: T, b: usize, c: T },
+   |              ^^^^^^^^^^^^^^^^^^^^^^^^

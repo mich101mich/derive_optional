@@ -26,5 +26,6 @@ fn as_slice() {
     assert_eq!(test.as_slice(), &[1][..]);
 
     let test = Nothing;
-    assert_eq!(test.as_slice(), &[][..]);
+    let rhs: &[usize] = &[]; // can't infer the type on an empty slice since multiple PartialEq impls exist
+    assert_eq!(test.as_slice(), rhs);
 }

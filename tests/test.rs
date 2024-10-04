@@ -36,6 +36,7 @@ mod specific {
 }
 
 use derive_optional::Optional;
+
 #[derive(Optional, Clone, Copy)]
 enum HasChanged<T> {
     Changed(T),
@@ -85,6 +86,54 @@ fn happy_path() {
 }
 
 #[test]
+fn happy_path_reordered() {
+    #[derive(Optional, Clone, Copy)]
+    enum HasChangedReordered<T> {
+        NoChange,
+        Changed(T),
+    }
+
+    // Querying the contained values
+    let mut change = HasChangedReordered::Changed(1);
+    assert!(change.is_changed());
+    assert!(!change.is_no_change());
+
+    change = HasChangedReordered::NoChange;
+    assert!(!change.is_changed());
+    assert!(change.is_no_change());
+
+    // Adapter for working with references
+    let mut change = HasChangedReordered::Changed(11);
+
+    let inner = change.as_ref().unwrap();
+    assert_eq!(inner, &11);
+
+    let inner = change.as_mut().unwrap();
+    *inner = 12;
+    assert_eq!(change.unwrap(), 12);
+
+    // Getting to contained values
+    let inner = HasChangedReordered::Changed(21).unwrap();
+    assert_eq!(inner, 21);
+
+    let inner = HasChangedReordered::Changed(22).expect("unreachable message");
+    assert_eq!(inner, 22);
+
+    // From/Into conversions
+    let op: Option<usize> = HasChangedReordered::NoChange.into();
+    assert_eq!(op, None);
+
+    let op: Option<_> = HasChangedReordered::Changed(31i64).into();
+    assert_eq!(op, Some(31i64));
+
+    let change: HasChangedReordered<usize> = Some(32).into();
+    assert_eq!(change.unwrap(), 32);
+
+    let change: HasChangedReordered<usize> = None.into();
+    assert!(change.is_no_change());
+}
+
+#[test]
 #[should_panic(expected = "called `HasChanged::unwrap()` on a `NoChange` value")]
 fn test_unwrap_panic() {
     HasChanged::<usize>::NoChange.unwrap();
@@ -98,8 +147,8 @@ fn test_expect_panic() {
 
 // TODO: check generic, lifetime, and where clause
 
-// #[test]
-// fn test() {
-//     let t = trybuild::TestCases::new();
-//     t.pass("passing/*.rs");
-// }
+#[test]
+#[ignore]
+fn error_message_tests() {
+    trybuild::TestCases::new().compile_fail("tests/fail/*.rs");
+}
