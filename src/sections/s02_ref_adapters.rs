@@ -20,11 +20,11 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
             name = name,
             ty = some_ty_name,
         );
-        let where_clause = container.where_clause_for(quote! {&'a #some_ty});
+        let ref_where = container.where_clause_for(quote! {&'a #some_ty});
         // can't be c_func right now because of trait bounds in const functions aren't available in our MSRV
         impl_block.extend(quote! {
             #[doc = #doc]
-            #func as_ref<'a>(&'a self) -> #name<&'a #some_ty> #where_clause {
+            #func as_ref<'a>(&'a self) -> #name<&'a #some_ty> #ref_where {
                 match *self {
                     #some(ref x) => #some(x),
                     _ => #none,
@@ -40,11 +40,11 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
             name = name,
             ty = some_ty_name,
         );
-        let where_clause = container.where_clause_for(quote! {&'a mut #some_ty});
+        let ref_mut_where = container.where_clause_for(quote! {&'a mut #some_ty});
         // can't be c_func right now because of &mut: see https://github.com/rust-lang/rust/issues/57349
         impl_block.extend(quote! {
             #[doc = #doc]
-            #func as_mut<'a>(&'a mut self) -> #name<&'a mut #some_ty> #where_clause {
+            #func as_mut<'a>(&'a mut self) -> #name<&'a mut #some_ty> #ref_mut_where {
                 match *self {
                     #some(ref mut x) => #some(x),
                     _ => #none,
@@ -61,11 +61,11 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
             ty = some_ty_name,
         );
         let ret_inner = quote! {::std::pin::Pin<&'a #some_ty>};
-        let where_clause = container.where_clause_for(&ret_inner);
+        let ref_pin_where = container.where_clause_for(&ret_inner);
         // can't be c_func right now because of Pin::<&'a T>::get_ref (https://github.com/rust-lang/rust/issues/76654)
         impl_block.extend(quote! {
             #[doc = #doc]
-            #func as_pin_ref<'a>(self: ::std::pin::Pin<&'a Self>) -> #name<#ret_inner> #where_clause {
+            #func as_pin_ref<'a>(self: ::std::pin::Pin<&'a Self>) -> #name<#ret_inner> #ref_pin_where {
                 match ::std::pin::Pin::get_ref(self) {
                     // SAFETY: `x` is guaranteed to be pinned because it comes from `self`
                     // which is pinned.
@@ -84,12 +84,12 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
             ty = some_ty_name,
         );
         let ret_inner = quote! {::std::pin::Pin<&'a mut #some_ty>};
-        let where_clause = container.where_clause_for(&ret_inner);
+        let ref_pin_mut_where = container.where_clause_for(&ret_inner);
         // can't be c_func right now because of Pin::<&'a mut T>::get_unchecked_mut (https://github.com/rust-lang/rust/issues/76654)
         // and &mut (https://github.com/rust-lang/rust/issues/57349)
         impl_block.extend(quote! {
             #[doc = #doc]
-            #func as_pin_mut<'a>(self: ::std::pin::Pin<&'a mut Self>) -> #name<#ret_inner> #where_clause {
+            #func as_pin_mut<'a>(self: ::std::pin::Pin<&'a mut Self>) -> #name<#ret_inner> #ref_pin_mut_where {
                 // SAFETY: `get_unchecked_mut` is never used to move the `Option` inside `self`.
                 // `x` is guaranteed to be pinned because it comes from `self` which is pinned.
                 unsafe {

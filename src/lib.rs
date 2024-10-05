@@ -149,7 +149,6 @@ impl DataContainer {
 }
 
 /// TODO: doc
-/// TODO: talk about `T` as placeholder for the contained type
 ///
 /// ## Generics
 ///
@@ -278,9 +277,10 @@ impl DataContainer {
 ///   but swapping `Self` with `Option`
 /// - `as_option_mut`: Converts `&mut Self` to `Option<&mut inner>`, similar to `as_mut`
 ///   but swapping `Self` with `Option`
-/// - `transpose` has additional implementations for `Self<Option>` (G)
-///   - `Option<Self>::transpose` would need to be implemented on `Option`, requiring the use of
-///     an extension trait that the user would need to import.
+/// - `flatten` on `Self<Option<inner>>`: Flattens a nested `Self<Option<inner>>` into `Self<inner>`.
+///   This is similar to `Option::flatten` (and `Self::flatten`), but with mixed `Option` and `Self`.
+///   - Note that the corresponding `Option<Self>` is not implemented, as it would require extending
+///     the existing `Option` type.
 ///
 /// ## Traits
 /// - `From<inner type> for Self`

@@ -20,10 +20,10 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
             name = name, none = none_name,
         );
         if is_generic {
-            let where_clause = container.where_clause_for(quote! {U});
+            let u_where = container.where_clause_for(quote! {U});
             impl_block.extend(quote! {
                 #[doc = #doc]
-                #func and<U>(self, optb: #name<U>) -> #name<U> #where_clause {
+                #func and<U>(self, optb: #name<U>) -> #name<U> #u_where {
                     match self {
                         #some(_) => optb,
                         _ => #none,
