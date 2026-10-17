@@ -64,14 +64,14 @@ fn zip_with() {
     let n: TestType<f32> = Nothing;
 
     assert_eq!(
-        a.zip_with(b, |x, y| format!("{} {}", x, y)),
+        a.zip_with(b, |x, y| format!("{x} {y}")),
         Something(String::from("1 hi"))
     );
     assert_eq!(
-        b.zip_with(a, |x, y| format!("{} {}", x, y)),
+        b.zip_with(a, |x, y| format!("{x} {y}")),
         Something(String::from("hi 1"))
     );
-    assert_eq!(a.zip_with(n, |x, y| format!("{} {}", x, y)), Nothing);
-    assert_eq!(n.zip_with(b, |x, y| format!("{} {}", x, y)), Nothing);
-    assert_eq!(n.zip_with(n, |x, y| format!("{} {}", x, y)), Nothing);
+    assert_eq!(a.zip_with(n, |x, y| format!("{x} {y}")), Nothing);
+    assert_eq!(n.zip_with(b, |x, y| format!("{x} {y}")), Nothing);
+    assert_eq!(n.zip_with(n, |x, y| format!("{x} {y}")), Nothing);
 }

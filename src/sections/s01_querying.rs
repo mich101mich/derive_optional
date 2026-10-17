@@ -17,7 +17,7 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     // is_some
     {
         let is_some = Ident::new(
-            &format!("is_{}", some_name_snake),
+            &format!("is_{some_name_snake}"),
             some.clone().into_iter().last().unwrap().span(),
         );
         let doc = format!(
@@ -37,7 +37,7 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     // is_some_and
     {
         let is_some_and = Ident::new(
-            &format!("is_{}_and", some_name_snake),
+            &format!("is_{some_name_snake}_and"),
             some.clone().into_iter().last().unwrap().span(),
         );
         let doc = format!(
@@ -62,7 +62,7 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     // is_none
     {
         let is_none = Ident::new(
-            &format!("is_{}", none_name_snake),
+            &format!("is_{none_name_snake}"),
             none.clone().into_iter().last().unwrap().span(),
         );
         let doc = format!(
@@ -81,7 +81,7 @@ pub(crate) fn add_section(container: &DataContainer, impl_block: &mut TokenStrea
     // is_none_or
     {
         let is_none_or = Ident::new(
-            &format!("is_{}_or", none_name_snake),
+            &format!("is_{none_name_snake}_or"),
             none.clone().into_iter().last().unwrap().span(),
         );
         let doc = format!(

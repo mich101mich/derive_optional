@@ -150,5 +150,5 @@ fn test_expect_panic() {
 #[test]
 #[ignore]
 fn error_message_tests() {
-    trybuild::TestCases::new().compile_fail("tests/fail/*.rs");
+    err_span_check::run_on_fail_dir();
 }

@@ -11,7 +11,7 @@ pub(crate) fn add_external(container: &DataContainer, additional_impls: &mut Tok
 
     // Self: From<#some_ty>
     {
-        let doc = format!("Moves the value into a `{}`.", some_name);
+        let doc = format!("Moves the value into a `{some_name}`.");
         additional_impls.extend(quote! {
             #[automatically_derived]
             #imp ::std::convert::From<#some_ty> for #full_name {
@@ -55,10 +55,7 @@ pub(crate) fn add_external(container: &DataContainer, additional_impls: &mut Tok
 
     // Self: Default
     {
-        let doc = format!(
-            "Returns a `{}` value. Equivalent to `Option::default`.",
-            none_name,
-        );
+        let doc = format!("Returns a `{none_name}` value. Equivalent to `Option::default`.");
         // note that this does not require `Default` for `#some_ty`, since the `none` variant is returned
         additional_impls.extend(quote! {
             #[automatically_derived]

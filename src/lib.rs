@@ -298,21 +298,21 @@ impl DataContainer {
 #[proc_macro_derive(Optional)]
 pub fn optional(input: TokenStream1) -> TokenStream1 {
     let input = syn::parse_macro_input!(input as syn::DeriveInput);
-    match optional_internal(input) {
-        Ok(s) => s.into(),
-        Err(e) => e.into(),
-    }
+    optional_internal(input).into_token_stream_1()
 }
 
 fn optional_internal(input: syn::DeriveInput) -> Result<TokenStream> {
     let name = input.ident;
 
     let data = match input.data {
-        syn::Data::Enum(data) => Ok(data),
-        syn::Data::Struct(data) => Err(data.struct_token.span),
-        syn::Data::Union(data) => Err(data.union_token.span),
-    }
-    .map_err(|span| Error::new(span, "Optional can only be used on enums"))?;
+        syn::Data::Enum(data) => data,
+        syn::Data::Struct(data) => {
+            bail!(data.struct_token.span => "Optional can only be used on enums");
+        }
+        syn::Data::Union(data) => {
+            bail!(data.union_token.span => "Optional can only be used on enums");
+        }
+    };
 
     let (some_variant, none_variant, some_field) = parse_variants(data.variants, &name)?;
 
@@ -398,11 +398,8 @@ fn optional_internal(input: syn::DeriveInput) -> Result<TokenStream> {
         #additional_impls
     };
 
-    // println!("//////////////////////////////////////////////////");
-    // println!("//////////////////////////////////////////////////");
-    // println!("{}", tokens);
-    // println!("//////////////////////////////////////////////////");
-    // println!("//////////////////////////////////////////////////");
+    // Comment in for debugging:
+    // std::fs::write("debug.rs", tokens.to_string()).unwrap();
 
     Ok(tokens)
 }
@@ -417,16 +414,17 @@ fn parse_variants(
         // can't use let-else yet due to msrv
         (a, b)
     } else {
-        let msg = "Optional needs exactly two variants";
-        return Error::err_spanned(enum_name, msg);
+        bail!(enum_name => "Optional needs exactly two variants");
     };
     if let Some(after) = iter.next() {
         // check for more variants
         let msg = "Optional only works when there are exactly 2 enum variants";
-        return Error::builder()
-            .with_spanned(after, msg)
-            .with_spans(iter, msg) // add all other variants
-            .build_err();
+        let mut error = ErrorBuilder::new();
+        error.with_spanned(after, msg);
+        for variant in iter {
+            error.with_spanned(variant, msg);
+        }
+        return error.build_err();
     }
 
     // figure out which one is the 'some' variant and which one is the 'none' variant
@@ -440,40 +438,27 @@ fn parse_variants(
         (Named(f), Unit) | (Unit, Named(f)) => {
             let wrong_ident = &if matches!(b.fields, Unit) { &a } else { &b }.ident;
             let hint = match f.named.len() {
-                0 => format!("`{}(...)`", wrong_ident),
-                1 => format!(
-                    "`{}({})`",
-                    wrong_ident,
-                    f.named.first().unwrap().ty.to_token_stream()
-                ),
+                0 => format!("`{wrong_ident}(...)`"),
+                1 => format!("`{wrong_ident}({})`", f.named[0].ty.to_token_stream()),
                 _ => format!(
-                    "`{0}({1}{0})`
-      with `struct {1}{0} {{ {2} }}`", // if this ever becomes a code suggestion, remember to add the generics from the enum
-                    wrong_ident,
-                    enum_name,
+                    "`{wrong_ident}({enum_name}{wrong_ident})`
+      with `struct {enum_name}{wrong_ident} {{ {} }}`", // if this ever becomes a code suggestion, remember to add the generics from the enum
                     f.named.to_token_stream().to_string().replace(" : ", ": ")
                 ),
             };
-            let msg = format!(
-                "Optional currently does not support named fields in the 'some' variant, only tuple variants.
-Hint: Change this variant to for example {}",
-                hint
-            );
-            return Error::err_spanned(f, msg);
+            bail!(f => "Optional currently does not support named fields in the 'some' variant, only tuple variants.
+Hint: Change this variant to for example {hint}");
         }
         (Unnamed(_), Unnamed(_)) => {
-            let msg = "Optional requires exactly one of its variants (the 'none' variant) to have no fields";
-            return Error::err_from_spans([a, b], msg);
+            bail!({ a, b } => "Optional requires exactly one of its variants (the 'none' variant) to have no fields");
         }
         (Unit, Unit) => {
-            let msg = "Optional requires exactly one of its variants (the 'some' variant) to contain data";
-            return Error::err_from_spans([a, b], msg);
+            bail!({ a, b } => "Optional requires exactly one of its variants (the 'some' variant) to contain data");
         }
 
         // everything else
         _ => {
-            let msg = "Optional needs one unit variant (the 'none' variant) and one variant with data (the 'some' variant)";
-            return Error::err_from_spans([a, b], msg);
+            bail!({ a, b } => "Optional needs one unit variant (the 'none' variant) and one variant with data (the 'some' variant)");
         }
     };
     if should_swap {
@@ -486,26 +471,21 @@ Hint: Change this variant to for example {}",
         // can't use let-else yet due to msrv
         field
     } else {
-        let msg = "Optional needs exactly one field in the 'some' variant";
-        return Error::err_spanned(a, msg);
+        bail!(a => "Optional needs exactly one field in the 'some' variant");
     };
     if let Some(after) = fields.next() {
         let msg = "Optional only works when there is exactly one field in the 'some' variant";
-        return Error::builder()
-            .with_spanned(after, msg)
-            .with_spans(fields, msg) // add all other fields
-            .build_err();
+        let mut error = ErrorBuilder::new();
+        error.with_spanned(after, msg);
+        for field in fields {
+            error.with_spanned(field, msg);
+        }
+        return error.build_err();
     }
 
     // check that the field is in the correct format
     if let Some(ident) = field.ident.as_ref() {
-        // note that this is technically an error in syn, since we only take syn::Fields::Unnamed
-        let msg = format!(
-            "Optional currently only supports tuple variants for the 'some' variant like `{}({})`",
-            ident,
-            field.ty.to_token_stream()
-        );
-        return Error::err_spanned(ident, msg);
+        bail!(ident => "Optional currently only supports tuple variants for the 'some' variant like `{ident}({})`", field.ty.to_token_stream());
     }
 
     Ok((a, b, field))
@@ -514,7 +494,7 @@ Hint: Change this variant to for example {}",
 fn check_generics(generics: syn::Generics, some_ty_name: &str) -> Result<Option<Bounds>> {
     let mut generic_type = None;
     let mut out_bounds = Bounds::new();
-    let mut error = Error::builder();
+    let mut error = ErrorBuilder::new();
     for ty in generics.params.into_iter() {
         match ty {
             syn::GenericParam::Type(ty) => {
@@ -554,10 +534,10 @@ fn check_generics(generics: syn::Generics, some_ty_name: &str) -> Result<Option<
     error.ok_or_build()?;
 
     if let Some(ty) = generic_type {
-        if ty != *some_ty_name {
-            let msg = "The generic type must be the same as the type in the 'some' variant";
-            return Error::err_spanned(ty, msg);
-        }
+        assert_or_bail!(
+            ty == *some_ty_name,
+            ty => "The generic type must be the same as the type in the 'some' variant"
+        );
 
         Ok(Some(out_bounds))
     } else {

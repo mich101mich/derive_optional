@@ -1,3 +1,6 @@
 [submodule "src/utils"]
 	path = src/utils
-	url = git@github.com:mich101mich/proc_macro_utils.git
+	url = ../proc_macro_utils.git
+[submodule "submodules/test_script"]
+	path = submodules/test_script
+	url = ../test_script.git
